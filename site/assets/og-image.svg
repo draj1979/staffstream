@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
+  <defs>
+    <radialGradient id="glow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#76ABAE" stop-opacity="0.22"/>
+      <stop offset="100%" stop-color="#76ABAE" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <rect width="1200" height="630" fill="#1C2128"/>
+  <circle cx="980" cy="120" r="420" fill="url(#glow)"/>
+
+  <!-- faint decorative org nodes, right side -->
+  <g opacity="0.35">
+    <circle cx="1040" cy="90" r="7" fill="#76ABAE"/>
+    <circle cx="1090" cy="130" r="7" fill="#76ABAE"/>
+    <circle cx="1065" cy="180" r="7" fill="#FF5722"/>
+    <line x1="1040" y1="90" x2="1065" y2="180" stroke="#455160" stroke-width="1.5"/>
+    <line x1="1090" y1="130" x2="1065" y2="180" stroke="#455160" stroke-width="1.5"/>
+  </g>
+
+  <!-- logo mark -->
+  <rect x="64" y="56" width="52" height="52" rx="12" fill="#76ABAE"/>
+  <circle cx="80" cy="72" r="4.6" fill="#1C2128"/>
+  <circle cx="100" cy="72" r="4.6" fill="#1C2128"/>
+  <circle cx="90" cy="92" r="4.6" fill="#FF5722"/>
+  <text x="132" y="97" font-family="Arial, Helvetica, sans-serif" font-weight="700" font-size="34" fill="#FFFFFF">StaffStream</text>
+
+  <!-- eyebrow -->
+  <text x="64" y="185" font-family="Arial, Helvetica, sans-serif" font-weight="600" font-size="15" letter-spacing="2.5" fill="#A5C8CA">AI WORKFORCE ORCHESTRATION PLATFORM</text>
+
+  <!-- headline -->
+  <text x="60" y="300" font-family="Georgia, 'Times New Roman', serif" font-size="72" fill="#FFFFFF">An AI assistant</text>
+  <text x="60" y="378" font-family="Georgia, 'Times New Roman', serif" font-size="72" fill="#FFFFFF">for <tspan font-style="italic" fill="#FF8A63">every employee.</tspan></text>
+
+  <!-- subtitle -->
+  <text x="64" y="440" font-family="Arial, Helvetica, sans-serif" font-size="23" fill="rgba(236,238,241,0.7)">Role-aware AI assistants — governed by policy, supervised by</text>
+  <text x="64" y="472" font-family="Arial, Helvetica, sans-serif" font-size="23" fill="rgba(236,238,241,0.7)">the managers you trust.</text>
+
+  <!-- bottom rule -->
+  <rect x="64" y="562" width="1072" height="3" fill="#FF5722" opacity="0.8"/>
+
+  <text x="64" y="600" font-family="Menlo, Consolas, monospace" font-size="16" fill="rgba(236,238,241,0.5)">staffstream.in</text>
+  <text x="1136" y="600" text-anchor="end" font-family="Arial, Helvetica, sans-serif" font-size="14" fill="rgba(236,238,241,0.4)">Built by Kartavya Technology</text>
+</svg>
