@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 280 64" width="280" height="64" fill="none">
+  <rect x="4" y="8" width="48" height="48" rx="7" fill="#F5F5F5"></rect>
+  <path d="M19 18h5.6v20.4h10v4.4H19V18z" fill="#303841"></path>
+  <rect x="16.8" y="18" width="10" height="2" fill="#303841"></rect>
+  <rect x="31.6" y="40.8" width="4.6" height="2" fill="#303841"></rect>
+  <path d="M52 8v9h-9c0-4.971 4.029-9 9-9z" fill="#FF5722"></path>
+  <text x="68" y="44" font-family="Instrument Serif, Georgia, serif" font-size="36" font-weight="400" fill="#F5F5F5" letter-spacing="-0.5">
+    LawG<tspan font-style="italic">IQ</tspan>
+  </text>
+</svg>

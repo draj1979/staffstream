@@ -1,0 +1,29 @@
+<!doctype html>
+<!-- @dsCard group="Components" name="Form inputs" subtitle="Text, search, focus, error" viewport="700x280" --><html><head><meta charset="utf-8"><link rel="stylesheet" href="_card.css">
+<style>
+.field { display:flex; flex-direction:column; gap:6px; }
+.field label { font-size:12px; font-weight:500; color:#303841; }
+.field input, .field textarea { font-family:var(--font-sans); font-size:14px; color:#1C2128; background:#fff; border:1px solid #CFD5DC; border-radius:6px; padding:9px 12px; outline:none; }
+.field input::placeholder { color:#8090A0; }
+.field input:focus, .field textarea:focus { border-color:#76ABAE; box-shadow:0 0 0 3px rgba(118,171,174,0.35); }
+.field.error input { border-color:#E14918; box-shadow:0 0 0 3px rgba(255,87,34,0.18); }
+.field .hint { font-size:11px; color:#5A6878; }
+.field .err  { font-size:11px; color:#C53D14; }
+.search { position:relative; }
+.search input { padding-left:34px; }
+.search svg { position:absolute; left:10px; top:50%; transform:translateY(-50%); color:#5A6878; }
+</style>
+</head><body>
+<div class="label-row"><span>Form inputs</span><span class="meta">text · search · focus · error</span></div>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+  <div class="field"><label>Matter name</label><input value="Smith v. Jones — discovery prep"></div>
+  <div class="field"><label>Citation</label><input placeholder="e.g. 410 U.S. 113"></div>
+  <div class="field"><label>Search</label>
+    <div class="search">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
+      <input placeholder="Search cases, statutes, briefs">
+    </div>
+  </div>
+  <div class="field error"><label>Jurisdiction</label><input value="9th Cir.&nbsp;&nbsp;†"><div class="err">Citation isn't binding here — Smith v. Jones is 4th Cir.</div></div>
+</div>
+</body></html>
