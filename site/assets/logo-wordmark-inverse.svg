@@ -1,0 +1,7 @@
+<svg width="176" height="28" viewBox="0 0 176 28" xmlns="http://www.w3.org/2000/svg">
+  <rect x="0" y="2" width="24" height="24" rx="6" fill="#76ABAE"/>
+  <circle cx="8" cy="10" r="2.4" fill="#14181D"/>
+  <circle cx="16" cy="10" r="2.4" fill="#14181D"/>
+  <circle cx="12" cy="18" r="2.4" fill="#FF5722"/>
+  <text x="32" y="21" font-family="Geist, ui-sans-serif, system-ui, sans-serif" font-size="19" font-weight="600" letter-spacing="-0.3" fill="#ECEEF1">StaffStream</text>
+</svg>
