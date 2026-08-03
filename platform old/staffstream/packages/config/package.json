@@ -1,0 +1,9 @@
+{
+  "name": "@staffstream/config",
+  "version": "0.0.1",
+  "exports": {
+    "./eslint": "./eslint.js",
+    "./tsconfig": "./tsconfig.base.json",
+    "./tailwind": "./tailwind.config.js"
+  }
+}

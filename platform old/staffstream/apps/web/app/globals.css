@@ -1,0 +1,10 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --cream: #F5EEDC;
+  --navy: #183B4E;
+  --blue: #27548A;
+  --gold: #DDA853;
+}
