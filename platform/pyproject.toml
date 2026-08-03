@@ -1,0 +1,20 @@
+[project]
+name = "staffstream-platform"
+version = "0.0.1"
+description = "Multi-tenant enterprise AI agent platform (powered by OpenClaw) — monorepo root"
+requires-python = ">=3.12"
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+src = ["services"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.pytest.ini_options]
+testpaths = ["services", "tests"]
+pythonpath = ["services"]
+
+[dependency-groups]
+dev = ["ruff>=0.6", "pytest>=8.0"]
