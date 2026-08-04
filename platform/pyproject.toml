@@ -5,8 +5,10 @@ description = "Multi-tenant enterprise AI agent platform (powered by OpenClaw) â
 requires-python = ">=3.12"
 dependencies = [
     "tenancy",
+    "auth",
     "tenant-service",
     "employee-service",
+    "auth-service",
 ]
 
 [tool.uv]
@@ -17,8 +19,10 @@ members = ["libs/*", "services/*"]
 
 [tool.uv.sources]
 tenancy = { workspace = true }
+auth = { workspace = true }
 tenant-service = { workspace = true }
 employee-service = { workspace = true }
+auth-service = { workspace = true }
 
 [tool.ruff]
 target-version = "py312"

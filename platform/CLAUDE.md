@@ -12,7 +12,7 @@ and integrations — is the actual product.
 
 ## Build phase (update this as phases complete)
 
-Current phase: **0 — walking skeleton**
+Current phase: **2 — Basic auth: email/password + JWT**
 
 Do not implement components outside the current phase unless explicitly asked.
 Phases:

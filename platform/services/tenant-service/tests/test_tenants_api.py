@@ -1,4 +1,17 @@
-async def test_create_and_get_tenant(client):
+import uuid
+
+from auth import encode_access_token, encode_system_token
+
+
+def system_headers(tenant_id: uuid.UUID) -> dict:
+    return {"Authorization": f"Bearer {encode_system_token(tenant_id)}"}
+
+
+def user_headers(tenant_id: uuid.UUID) -> dict:
+    return {"Authorization": f"Bearer {encode_access_token(tenant_id, uuid.uuid4())}"}
+
+
+async def test_create_tenant_requires_no_auth(client):
     resp = await client.post(
         "/tenants",
         json={"company_name": "Acme Corp", "plan": "business", "storage_quota_bytes": 1_000_000},
@@ -8,25 +21,71 @@ async def test_create_and_get_tenant(client):
     assert body["company_name"] == "Acme Corp"
     assert body["subscription_status"] == "trial"
 
-    tenant_id = body["tenant_id"]
+
+async def test_get_tenant_requires_auth(client):
+    resp = await client.post("/tenants", json={"company_name": "Acme Corp"})
+    tenant_id = resp.json()["tenant_id"]
+
     resp = await client.get(f"/tenants/{tenant_id}")
+    assert resp.status_code == 401
+
+
+async def test_get_own_tenant_succeeds(client):
+    resp = await client.post("/tenants", json={"company_name": "Acme Corp"})
+    tenant_id = resp.json()["tenant_id"]
+
+    resp = await client.get(f"/tenants/{tenant_id}", headers=user_headers(uuid.UUID(tenant_id)))
     assert resp.status_code == 200
     assert resp.json()["tenant_id"] == tenant_id
 
 
+async def test_get_other_tenant_is_forbidden(client):
+    resp = await client.post("/tenants", json={"company_name": "Acme Corp"})
+    tenant_id = resp.json()["tenant_id"]
+
+    resp = await client.get(f"/tenants/{tenant_id}", headers=user_headers(uuid.uuid4()))
+    assert resp.status_code == 403
+
+
 async def test_get_missing_tenant_404s(client):
-    resp = await client.get("/tenants/00000000-0000-0000-0000-000000000000")
+    tenant_id = uuid.uuid4()
+    resp = await client.get(f"/tenants/{tenant_id}", headers=user_headers(tenant_id))
     assert resp.status_code == 404
 
 
-async def test_list_and_update_tenant(client):
+async def test_list_requires_system_scope(client):
+    await client.post("/tenants", json={"company_name": "Globex"})
+
+    resp = await client.get("/tenants")
+    assert resp.status_code == 401
+
+    resp = await client.get("/tenants", headers=user_headers(uuid.uuid4()))
+    assert resp.status_code == 403
+
+    resp = await client.get("/tenants", headers=system_headers(uuid.uuid4()))
+    assert resp.status_code == 200
+
+
+async def test_update_own_tenant(client):
     resp = await client.post("/tenants", json={"company_name": "Globex"})
     tenant_id = resp.json()["tenant_id"]
 
-    resp = await client.get("/tenants")
-    assert resp.status_code == 200
-    assert any(t["tenant_id"] == tenant_id for t in resp.json())
-
-    resp = await client.patch(f"/tenants/{tenant_id}", json={"subscription_status": "active"})
+    resp = await client.patch(
+        f"/tenants/{tenant_id}",
+        json={"subscription_status": "active"},
+        headers=user_headers(uuid.UUID(tenant_id)),
+    )
     assert resp.status_code == 200
     assert resp.json()["subscription_status"] == "active"
+
+
+async def test_update_other_tenant_is_forbidden(client):
+    resp = await client.post("/tenants", json={"company_name": "Globex"})
+    tenant_id = resp.json()["tenant_id"]
+
+    resp = await client.patch(
+        f"/tenants/{tenant_id}",
+        json={"subscription_status": "active"},
+        headers=user_headers(uuid.uuid4()),
+    )
+    assert resp.status_code == 403

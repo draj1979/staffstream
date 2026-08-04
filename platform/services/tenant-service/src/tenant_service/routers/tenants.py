@@ -3,25 +3,56 @@ import uuid
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from auth import Principal, require_auth
+
 from .. import crud
 from ..db import get_db
 from ..schemas import TenantCreate, TenantOut, TenantUpdate
 
 router = APIRouter(prefix="/tenants", tags=["tenants"])
 
+# Only a platform-internal caller (system-scoped token) may list every
+# tenant — no employee JWT should ever see other companies' tenant rows.
+system_auth = require_auth(allowed_scopes=("system",))
+# Reading/updating a specific tenant requires a real employee of THAT
+# tenant (enforced below, since Tenant isn't itself tenant-scoped and so
+# gets no automatic filtering from the tenancy ORM layer).
+user_auth = require_auth()
+
+
+def _require_self_tenant(principal: Principal, tenant_id: uuid.UUID) -> None:
+    if principal.tenant_id != tenant_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not authorized to access another tenant's data",
+        )
+
 
 @router.post("", response_model=TenantOut, status_code=status.HTTP_201_CREATED)
 async def create_tenant(data: TenantCreate, db: AsyncSession = Depends(get_db)):
+    """Deliberately unauthenticated: this is the platform onboarding entry
+    point — a new organization has no employee, and therefore no token,
+    until after its tenant exists and its first employee signs up."""
     return await crud.create_tenant(db, data)
 
 
 @router.get("", response_model=list[TenantOut])
-async def list_tenants(limit: int = 100, offset: int = 0, db: AsyncSession = Depends(get_db)):
+async def list_tenants(
+    limit: int = 100,
+    offset: int = 0,
+    principal: Principal = Depends(system_auth),
+    db: AsyncSession = Depends(get_db),
+):
     return await crud.list_tenants(db, limit=limit, offset=offset)
 
 
 @router.get("/{tenant_id}", response_model=TenantOut)
-async def get_tenant(tenant_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+async def get_tenant(
+    tenant_id: uuid.UUID,
+    principal: Principal = Depends(user_auth),
+    db: AsyncSession = Depends(get_db),
+):
+    _require_self_tenant(principal, tenant_id)
     tenant = await crud.get_tenant(db, tenant_id)
     if tenant is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found")
@@ -30,8 +61,12 @@ async def get_tenant(tenant_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
 
 @router.patch("/{tenant_id}", response_model=TenantOut)
 async def update_tenant(
-    tenant_id: uuid.UUID, data: TenantUpdate, db: AsyncSession = Depends(get_db)
+    tenant_id: uuid.UUID,
+    data: TenantUpdate,
+    principal: Principal = Depends(user_auth),
+    db: AsyncSession = Depends(get_db),
 ):
+    _require_self_tenant(principal, tenant_id)
     tenant = await crud.get_tenant(db, tenant_id)
     if tenant is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found")

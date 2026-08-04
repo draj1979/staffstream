@@ -12,10 +12,12 @@ dependencies = [
     "pydantic[email]>=2.9",
     "pydantic-settings>=2.6",
     "tenancy",
+    "auth",
 ]
 
 [tool.uv.sources]
 tenancy = { workspace = true }
+auth = { workspace = true }
 
 [dependency-groups]
 dev = ["aiosqlite>=0.20"]
