@@ -10,8 +10,9 @@ conventions.
 
 ## Current phase
 
-**Phase 3 — Agent Registry + LLM Gateway (Claude only for now).** (OpenClaw
-runtime wiring and multi-provider support are separate, later work.)
+**Phase 3 — Agent Registry + LLM Gateway (Claude only for now) + OpenClaw
+wiring.** (Multi-provider support is Phase 10; Memory and Knowledge Platform
+are Phases 4 and 5 — OpenClaw currently stubs both.)
 
 ## Stack
 
@@ -99,6 +100,28 @@ registered (via the official Anthropic SDK) — Phase 10 registers GPT,
 Gemini, etc. as more `Provider` implementations, with no changes needed to
 the gateway or its callers.
 
+## OpenClaw Runtime
+
+`services/openclaw-runtime` implements the request flow from CLAUDE.md:
+`POST /chat` authenticates the caller (`require_auth`, which also identifies
+tenant and employee from the JWT), fetches that employee's agent from Agent
+Registry, and calls LLM Gateway with the agent's model/prompt/temperature to
+produce a reply.
+
+It's deliberately stateless — the whole point of "OpenClaw itself is
+stateless" from CLAUDE.md. Every `/chat` call re-fetches the agent from
+Agent Registry over HTTP; nothing is cached in the process between
+requests, so changing an agent's model or prompt takes effect on the very
+next message with no restart or cache invalidation anywhere (see
+[runtime.py](services/openclaw-runtime/src/openclaw_runtime/runtime.py) and
+its no-caching test). It forwards the caller's own bearer token to both
+Agent Registry and LLM Gateway rather than minting a new one — the caller
+already has a valid session, so there's no separate identity to establish.
+[memory.py](services/openclaw-runtime/src/openclaw_runtime/memory.py) and
+[knowledge.py](services/openclaw-runtime/src/openclaw_runtime/knowledge.py)
+are no-op stubs with the real service's eventual signature — Phases 4 and 5
+replace their bodies, not their callers.
+
 ## Local development
 
 ```bash
@@ -112,6 +135,7 @@ make run-employee-service   # http://localhost:8002
 make run-auth-service       # http://localhost:8003
 make run-agent-registry     # http://localhost:8004
 make run-llm-gateway        # http://localhost:8005
+make run-openclaw-runtime   # http://localhost:8006
 make down     # stop containers
 ```
 
@@ -133,6 +157,7 @@ services/
   auth-service/        Signup, login, refresh, logout — the only service touching credentials
   agent-registry/      One agent profile per employee: model, prompt, temperature, memory namespace, ...
   llm-gateway/          Provider abstraction over LLMs; Claude only for now
+  openclaw-runtime/     Stateless: POST /chat — loads agent, calls LLM Gateway, returns the reply
 tests/                 root-level smoke tests
 docs/                  architecture and design docs
 infra/                 docker-compose init scripts, deployment infra

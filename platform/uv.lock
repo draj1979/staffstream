@@ -13,6 +13,7 @@ members = [
     "auth-service",
     "employee-service",
     "llm-gateway",
+    "openclaw-runtime",
     "staffstream-platform",
     "tenancy",
     "tenant-service",
@@ -826,6 +827,32 @@ wheels = [
 ]
 
 [[package]]
+name = "openclaw-runtime"
+version = "0.1.0"
+source = { editable = "services/openclaw-runtime" }
+dependencies = [
+    { name = "auth" },
+    { name = "fastapi" },
+    { name = "httpx" },
+    { name = "pydantic" },
+    { name = "pydantic-settings" },
+    { name = "uvicorn", extra = ["standard"] },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "auth", editable = "libs/auth" },
+    { name = "fastapi", specifier = ">=0.115" },
+    { name = "httpx", specifier = ">=0.27" },
+    { name = "pydantic", specifier = ">=2.9" },
+    { name = "pydantic-settings", specifier = ">=2.6" },
+    { name = "uvicorn", extras = ["standard"], specifier = ">=0.32" },
+]
+
+[package.metadata.requires-dev]
+dev = []
+
+[[package]]
 name = "packaging"
 version = "26.2"
 source = { registry = "https://pypi.org/simple" }
@@ -1153,6 +1180,7 @@ dependencies = [
     { name = "auth-service" },
     { name = "employee-service" },
     { name = "llm-gateway" },
+    { name = "openclaw-runtime" },
     { name = "tenancy" },
     { name = "tenant-service" },
 ]
@@ -1173,6 +1201,7 @@ requires-dist = [
     { name = "auth-service", editable = "services/auth-service" },
     { name = "employee-service", editable = "services/employee-service" },
     { name = "llm-gateway", editable = "services/llm-gateway" },
+    { name = "openclaw-runtime", editable = "services/openclaw-runtime" },
     { name = "tenancy", editable = "libs/tenancy" },
     { name = "tenant-service", editable = "services/tenant-service" },
 ]

@@ -11,6 +11,7 @@ dependencies = [
     "auth-service",
     "agent-registry",
     "llm-gateway",
+    "openclaw-runtime",
 ]
 
 [tool.uv]
@@ -27,6 +28,7 @@ employee-service = { workspace = true }
 auth-service = { workspace = true }
 agent-registry = { workspace = true }
 llm-gateway = { workspace = true }
+openclaw-runtime = { workspace = true }
 
 [tool.ruff]
 target-version = "py312"

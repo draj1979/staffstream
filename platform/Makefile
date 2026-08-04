@@ -1,5 +1,6 @@
 .PHONY: up down logs lint test migrate \
-	run-tenant-service run-employee-service run-auth-service run-agent-registry run-llm-gateway
+	run-tenant-service run-employee-service run-auth-service run-agent-registry run-llm-gateway \
+	run-openclaw-runtime
 
 up:
 	docker compose up -d
@@ -36,3 +37,6 @@ run-agent-registry:
 
 run-llm-gateway:
 	uv run uvicorn llm_gateway.main:app --reload --port 8005 --app-dir services/llm-gateway/src
+
+run-openclaw-runtime:
+	uv run uvicorn openclaw_runtime.main:app --reload --port 8006 --app-dir services/openclaw-runtime/src
