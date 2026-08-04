@@ -59,7 +59,7 @@ async def test_chat_uses_agent_config_and_returns_reply(client, monkeypatch):
         assert emp_id == employee_id
         return agent
 
-    async def fake_generate(*, bearer_token, model, system, messages, temperature):
+    async def fake_generate(*, bearer_token, model, system, messages, temperature, agent_id=None):
         captured.update(
             bearer_token=bearer_token, model=model, system=system,
             messages=messages, temperature=temperature,

@@ -10,8 +10,9 @@ conventions.
 
 ## Current phase
 
-**Phase 6 — Harden the API Gateway, containerize the platform, deploy to a
-single k8s namespace.**
+**Phase 7 — Analytics Service: usage, tokens, cost, conversation count,
+agent health, and productivity metrics, exposed via Admin/Finance/IT
+dashboards.**
 
 ## Stack
 
@@ -22,6 +23,7 @@ single k8s namespace.**
 - LLM: Anthropic Claude via the official SDK, behind a provider-abstraction interface
 - Embeddings: Voyage AI (`voyage-3-lite`, 512-dim) — Vector DB: pgvector
 - Containers: one Dockerfile per service — Orchestration: Kubernetes (single namespace)
+- Events: RabbitMQ (topic exchange) — LLM usage / chat interaction events, consumed by Analytics Service
 
 ## Tenant isolation
 
@@ -219,13 +221,55 @@ three things no individual backend service has on its own:
   unchanged, since those are messages the backend already wrote to be
   client-safe.
 
+## Analytics Service
+
+`services/analytics-service` never sits on the `/chat` request path — it's
+fed asynchronously so LLM Gateway/OpenClaw latency is never coupled to
+analytics ingestion. [libs/events](libs/events) defines the shared event
+schemas and a thin `aio-pika`-based pub/sub wrapper over a RabbitMQ topic
+exchange (`staffstream.events`):
+
+- **LLM Gateway** publishes an `LLMUsageEvent` (tenant, employee, agent,
+  provider, model, input/output tokens, `cost_usd` from
+  [pricing.py](services/llm-gateway/src/llm_gateway/pricing.py)) after
+  every successful `/generate` call.
+- **OpenClaw Runtime** publishes a `ChatInteractionEvent` (tenant,
+  employee, agent, success/failure, which stage failed if any, latency)
+  after every `/chat` call, success or failure — agent attribution
+  survives even a downstream failure via a small `TurnContext` object
+  threaded through the call.
+
+Both publish sites use `asyncio.create_task` (never awaited by the route
+handler) with a strong reference kept in `app.state.background_tasks`, and
+swallow their own publish failures internally — a RabbitMQ outage degrades
+analytics, never the chat/generate response. Analytics Service's own
+consumers ([consumer.py](services/analytics-service/src/analytics_service/consumer.py))
+reconnect with exponential backoff and set the tenant context straight
+from the event payload (there's no JWT on a queue message) before writing
+a row; a message that fails to parse is logged and dropped rather than
+redelivered forever (documented as a known simplification — no
+dead-letter queue yet).
+
+Three read endpoints aggregate at query time (`crud.py`) per the HLD's
+dashboard split — `GET /analytics/admin` (conversation count, success
+rate, active employees/agents, token/cost totals), `/analytics/finance`
+(cost by model, by employee, daily trend), and `/analytics/it` (error
+rate, avg/p95 latency, per-agent health, errors by failure stage) — all
+behind `require_auth()` and tenant-scoped through the same tenancy layer
+as everything else, with `from_date`/`to_date` query params defaulting to
+a trailing 30-day window. Role-gating which dashboard an employee can see
+is RBAC, deferred to Phase 9 like everywhere else in the platform.
+`SkillUsageEventRow`/`SkillUsageEvent` exist end-to-end in the schema
+already, ready for Phase 8's Skill Marketplace to start publishing into —
+no producer emits them yet.
+
 ## Containers & Kubernetes
 
 Every service has its own `Dockerfile` (multi-stage, `uv`-based, built
 from the repo root since this is a uv workspace — see any service's
-Dockerfile for the exact command). `make docker-build` builds all nine.
-`infra/k8s/` has Deployment + Service manifests for all nine plus the
-namespace, ConfigMap, Secret template, and in-cluster Postgres/Redis —
+Dockerfile for the exact command). `make docker-build` builds all ten.
+`infra/k8s/` has Deployment + Service manifests for all ten plus the
+namespace, ConfigMap, Secret template, and in-cluster Postgres/Redis/RabbitMQ —
 see [infra/k8s/README.md](infra/k8s/README.md) for the full deploy flow.
 Every Deployment's `livenessProbe` hits `/healthz` (process alive — never
 checks dependencies, so a DB blip doesn't get the pod restarted) and its
@@ -238,12 +282,13 @@ restarting a pod that just needs its dependency to come back.
 
 ```bash
 cp .env.example .env
-make up       # start Postgres + Redis + Postgres/pgvector via docker-compose
+make up       # start Postgres + Redis + Postgres/pgvector + RabbitMQ via docker-compose
 make migrate  # run Alembic migrations for every service with a database
 make lint     # ruff
 make test     # pytest (fast, sqlite-backed where possible; Knowledge Service
-              # skips cleanly without a live Postgres+pgvector; nothing ever
-              # calls the real Anthropic or Voyage AI APIs)
+              # skips cleanly without a live Postgres+pgvector, libs/events
+              # skips cleanly without a live RabbitMQ; nothing ever calls the
+              # real Anthropic or Voyage AI APIs)
 make run-tenant-service     # http://localhost:8001
 make run-employee-service   # http://localhost:8002
 make run-auth-service       # http://localhost:8003
@@ -253,9 +298,10 @@ make run-openclaw-runtime   # http://localhost:8006
 make run-memory-service     # http://localhost:8007
 make run-knowledge-service  # http://localhost:8008
 make run-api-gateway        # http://localhost:8000
+make run-analytics-service  # http://localhost:8009
 make down     # stop containers
 
-make docker-build   # build all 9 service images (staffstream/<service>:latest)
+make docker-build   # build all 10 service images (staffstream/<service>:latest)
 ```
 
 To try the whole platform containerized rather than via `make run-*`, see
@@ -279,16 +325,18 @@ provider.
 libs/
   tenancy/            shared tenant-isolation ORM base + session middleware
   auth/                shared JWT issuance/verification + password hashing
+  events/              shared event schemas + RabbitMQ pub/sub (publisher, consumer)
 services/
   tenant-service/      Tenant CRUD: plan, storage quota, LLM config, branding, subscription
   employee-service/    Employee CRUD: department, designation, manager, roles, agent_id
   auth-service/        Signup, login, refresh, logout — the only service touching credentials
   agent-registry/      One agent profile per employee: model, prompt, temperature, memory namespace, ...
-  llm-gateway/          Provider abstraction over LLMs; Claude only for now
-  openclaw-runtime/     Stateless: POST /chat — loads agent + memory + knowledge, calls LLM Gateway, stores the turn
+  llm-gateway/          Provider abstraction over LLMs; Claude only for now — emits LLM usage events
+  openclaw-runtime/     Stateless: POST /chat — loads agent + memory + knowledge, calls LLM Gateway, stores the turn, emits chat interaction events
   memory-service/       Per-employee memory: conversation, long-term, preferences, learned facts
   knowledge-service/    Company/department/personal knowledge: PDF/DOCX -> chunks -> pgvector
   api-gateway/          Front door: per-tenant rate limiting, size limits, sanitized errors, reverse proxy
+  analytics-service/    Usage/tokens/cost/health from queued events — Admin/Finance/IT dashboards
 tests/                 root-level smoke tests
 docs/                  architecture and design docs
 infra/

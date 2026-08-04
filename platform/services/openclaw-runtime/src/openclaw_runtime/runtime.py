@@ -1,4 +1,5 @@
 import uuid
+from dataclasses import dataclass
 
 from auth import Principal
 
@@ -6,6 +7,16 @@ from . import knowledge, memory
 from .agent_client import get_agent_for_employee
 from .llm_client import generate
 from .schemas import ChatResponse
+
+
+@dataclass
+class TurnContext:
+    """Populated progressively as run_chat_turn proceeds, so the caller
+    (chat.py) can still report which agent was involved even if a later
+    step fails — agent_id is set right after the agent fetch succeeds,
+    before memory/knowledge/LLM ever run."""
+
+    agent_id: uuid.UUID | None = None
 
 
 def _build_system_prompt(agent: dict, memory_context: dict, knowledge_context: str | None) -> str:
@@ -32,7 +43,13 @@ def _build_system_prompt(agent: dict, memory_context: dict, knowledge_context: s
     return "\n\n".join(parts)
 
 
-async def run_chat_turn(principal: Principal, message: str, *, bearer_token: str) -> ChatResponse:
+async def run_chat_turn(
+    principal: Principal,
+    message: str,
+    *,
+    bearer_token: str,
+    context: TurnContext | None = None,
+) -> ChatResponse:
     """The OpenClaw Runtime entry point for a single chat turn.
 
     Deliberately stateless: agent config, memory, and knowledge are all
@@ -41,7 +58,11 @@ async def run_chat_turn(principal: Principal, message: str, *, bearer_token: str
     prompt, or memory takes effect on the very next message, with no
     restart or cache invalidation anywhere.
     """
+    if context is None:
+        context = TurnContext()
+
     agent = await get_agent_for_employee(principal.employee_id, bearer_token=bearer_token)
+    context.agent_id = uuid.UUID(agent["agent_id"])
     memory_namespace = agent["memory_namespace"]
 
     memory_context = await memory.load_context(memory_namespace, bearer_token=bearer_token)
@@ -61,6 +82,7 @@ async def run_chat_turn(principal: Principal, message: str, *, bearer_token: str
         system=system_prompt,
         messages=messages,
         temperature=agent["temperature"],
+        agent_id=context.agent_id,
     )
 
     await memory.store_turn(
@@ -72,7 +94,7 @@ async def run_chat_turn(principal: Principal, message: str, *, bearer_token: str
 
     return ChatResponse(
         reply=llm_response["content"],
-        agent_id=uuid.UUID(agent["agent_id"]),
+        agent_id=context.agent_id,
         model=llm_response["model"],
         usage=llm_response["usage"],
     )

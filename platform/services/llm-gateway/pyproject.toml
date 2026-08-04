@@ -10,10 +10,12 @@ dependencies = [
     "pydantic-settings>=2.6",
     "anthropic>=0.40",
     "auth",
+    "events",
 ]
 
 [tool.uv.sources]
 auth = { workspace = true }
+events = { workspace = true }
 
 [dependency-groups]
 dev = ["httpx>=0.27"]

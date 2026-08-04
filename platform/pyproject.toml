@@ -6,6 +6,7 @@ requires-python = ">=3.12"
 dependencies = [
     "tenancy",
     "auth",
+    "events",
     "tenant-service",
     "employee-service",
     "auth-service",
@@ -15,6 +16,7 @@ dependencies = [
     "memory-service",
     "knowledge-service",
     "api-gateway",
+    "analytics-service",
 ]
 
 [tool.uv]
@@ -26,6 +28,7 @@ members = ["libs/*", "services/*"]
 [tool.uv.sources]
 tenancy = { workspace = true }
 auth = { workspace = true }
+events = { workspace = true }
 tenant-service = { workspace = true }
 employee-service = { workspace = true }
 auth-service = { workspace = true }
@@ -35,6 +38,7 @@ openclaw-runtime = { workspace = true }
 memory-service = { workspace = true }
 knowledge-service = { workspace = true }
 api-gateway = { workspace = true }
+analytics-service = { workspace = true }
 
 [tool.ruff]
 target-version = "py312"

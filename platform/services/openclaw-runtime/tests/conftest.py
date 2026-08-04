@@ -1,7 +1,12 @@
+import asyncio
+
 import pytest
 from httpx import ASGITransport, AsyncClient
 from openclaw_runtime import employee_client, knowledge_client, memory_client
+from openclaw_runtime.dependencies import get_publisher
 from openclaw_runtime.main import app
+
+from events import Publisher
 
 
 @pytest.fixture(autouse=True)
@@ -54,8 +59,34 @@ def stub_knowledge_platform(monkeypatch):
     monkeypatch.setattr(knowledge_client, "search_knowledge", fake_search_knowledge)
 
 
+class FakePublisher(Publisher):
+    """Records every publish call and lets tests await until the
+    fire-and-forget task on the other side has actually run — the route
+    schedules with asyncio.create_task and returns before it completes."""
+
+    def __init__(self):
+        self.published: list[tuple[str, bytes]] = []
+        self._event = asyncio.Event()
+
+    async def publish(self, routing_key: str, payload: bytes) -> None:
+        self.published.append((routing_key, payload))
+        self._event.set()
+
+    async def wait_for_publish(self, timeout: float = 1.0) -> None:
+        await asyncio.wait_for(self._event.wait(), timeout=timeout)
+
+
 @pytest.fixture
-async def client():
-    transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as ac:
-        yield ac
+def fake_publisher():
+    return FakePublisher()
+
+
+@pytest.fixture
+async def client(fake_publisher):
+    app.dependency_overrides[get_publisher] = lambda: fake_publisher
+    try:
+        transport = ASGITransport(app=app)
+        async with AsyncClient(transport=transport, base_url="http://test") as ac:
+            yield ac
+    finally:
+        app.dependency_overrides.clear()

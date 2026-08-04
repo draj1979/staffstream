@@ -20,6 +20,7 @@ kubectl apply -f secret.yaml
 kubectl apply -f postgres.yaml
 kubectl apply -f postgres-vector.yaml
 kubectl apply -f redis.yaml
+kubectl apply -f rabbitmq.yaml
 
 kubectl apply -f services/
 ```
@@ -42,7 +43,7 @@ real registry, and pins a real tag instead of `latest`.
 
 - `namespace.yaml` — the `staffstream` namespace everything else lives in.
 - `configmap.yaml` — non-secret config: inter-service URLs (k8s DNS names,
-  e.g. `http://tenant-service:8001`) and `REDIS_URL`.
+  e.g. `http://tenant-service:8001`), `REDIS_URL`, and `RABBITMQ_URL`.
 - `secret.example.yaml` — template for `JWT_SECRET_KEY`, `ANTHROPIC_API_KEY`,
   `VOYAGE_API_KEY`, Postgres credentials, and every `*_DATABASE_URL` (these
   live in the Secret, not the ConfigMap, because they embed the DB
@@ -50,12 +51,14 @@ real registry, and pins a real tag instead of `latest`.
   secret manager instead, per CLAUDE.md's security baseline.
 - `postgres.yaml` — backs every service except knowledge-service: a
   ConfigMap holding the same `init-db.sh` used by docker-compose (creates
-  the five non-vector per-service databases), a PVC, Deployment, Service.
+  the six non-vector per-service databases), a PVC, Deployment, Service.
 - `postgres-vector.yaml` — separate `pgvector/pgvector:pg16` instance
   dedicated to knowledge-service, mirroring docker-compose's split (kept
-  separate so the pgvector requirement never touches the other five
-  services' database or its image/collation).
+  separate so the pgvector requirement never touches the other services'
+  database or its image/collation).
 - `redis.yaml` — backs the API Gateway's per-tenant rate limiter.
+- `rabbitmq.yaml` — event bus: LLM Gateway and OpenClaw Runtime publish
+  usage/interaction events here, Analytics Service consumes them.
 - `services/*.yaml` — one Deployment + Service per backend service, each
   wired with `livenessProbe` on `/healthz` and `readinessProbe` on
   `/readyz` (see each service's own `/readyz` — DB-backed services check

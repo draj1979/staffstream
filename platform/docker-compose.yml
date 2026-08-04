@@ -47,6 +47,21 @@ services:
       timeout: 5s
       retries: 5
 
+  # Event bus for phase 7: LLM Gateway and OpenClaw Runtime publish usage/
+  # interaction events here; Analytics Service consumes them. Management
+  # UI on 15672 (guest/guest, local dev only) is handy for eyeballing
+  # queues while testing.
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
 volumes:
   postgres_data:
   postgres_vector_data:

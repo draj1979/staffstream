@@ -8,6 +8,7 @@ metadata:
   namespace: staffstream
 data:
   REDIS_URL: "redis://redis:6379/0"
+  RABBITMQ_URL: "amqp://guest:guest@rabbitmq:5672/"
 
   EMPLOYEE_SERVICE_AGENT_REGISTRY_URL: "http://agent-registry:8004"
   AUTH_SERVICE_EMPLOYEE_SERVICE_URL: "http://employee-service:8002"

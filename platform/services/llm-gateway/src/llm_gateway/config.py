@@ -12,5 +12,9 @@ class Settings(BaseSettings):
     anthropic_api_key: str = "not-set-configure-ANTHROPIC_API_KEY"
     default_provider: str = "claude"
 
+    # Shared infra, deliberately unprefixed — same broker every service
+    # that publishes/consumes analytics events would use.
+    rabbitmq_url: str = "amqp://guest:guest@localhost:5672/"
+
 
 settings = Settings()

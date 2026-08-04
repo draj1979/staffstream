@@ -84,7 +84,8 @@ jobs:
             -c "CREATE DATABASE employee_service" \
             -c "CREATE DATABASE auth_service" \
             -c "CREATE DATABASE agent_registry" \
-            -c "CREATE DATABASE memory_service"
+            -c "CREATE DATABASE memory_service" \
+            -c "CREATE DATABASE analytics_service"
 
       - name: Migrate tenant-service against real Postgres
         working-directory: services/tenant-service
@@ -127,3 +128,42 @@ jobs:
         env:
           KNOWLEDGE_SERVICE_DATABASE_URL: postgresql+asyncpg://staffstream:staffstream@localhost:5434/knowledge_service
         run: uv run pytest .
+
+      - name: Migrate analytics-service against real Postgres
+        working-directory: services/analytics-service
+        env:
+          ANALYTICS_SERVICE_DATABASE_URL: postgresql+asyncpg://staffstream:staffstream@localhost:5432/analytics_service
+        run: uv run alembic upgrade head
+
+  events:
+    runs-on: ubuntu-latest
+    services:
+      rabbitmq:
+        image: rabbitmq:3.13-management-alpine
+        ports:
+          - 5672:5672
+        options: >-
+          --health-cmd "rabbitmq-diagnostics -q ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          version: "latest"
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: uv sync --dev
+
+      - name: Test libs/events against real RabbitMQ
+        env:
+          RABBITMQ_URL: amqp://guest:guest@localhost:5672/
+        run: uv run pytest libs/events
