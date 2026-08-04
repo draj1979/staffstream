@@ -67,7 +67,8 @@ jobs:
           PGPASSWORD=staffstream psql -h localhost -U staffstream -d staffstream \
             -c "CREATE DATABASE tenant_service" \
             -c "CREATE DATABASE employee_service" \
-            -c "CREATE DATABASE auth_service"
+            -c "CREATE DATABASE auth_service" \
+            -c "CREATE DATABASE agent_registry"
 
       - name: Migrate tenant-service against real Postgres
         working-directory: services/tenant-service
@@ -85,4 +86,10 @@ jobs:
         working-directory: services/auth-service
         env:
           AUTH_SERVICE_DATABASE_URL: postgresql+asyncpg://staffstream:staffstream@localhost:5432/auth_service
+        run: uv run alembic upgrade head
+
+      - name: Migrate agent-registry against real Postgres
+        working-directory: services/agent-registry
+        env:
+          AGENT_REGISTRY_DATABASE_URL: postgresql+asyncpg://staffstream:staffstream@localhost:5432/agent_registry
         run: uv run alembic upgrade head

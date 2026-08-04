@@ -9,6 +9,7 @@ class Settings(BaseSettings):
     database_url: str = (
         "postgresql+asyncpg://staffstream:staffstream@localhost:5432/employee_service"
     )
+    agent_registry_url: str = "http://localhost:8004"
 
 
 settings = Settings()

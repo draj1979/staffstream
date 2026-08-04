@@ -8,6 +8,8 @@ Alembic migration history.
 - `tenant-service/` — Tenant CRUD, isolation, plan, billing, limits (Phase 1)
 - `employee-service/` — Employee CRUD, AD/Google Workspace sync (Phase 1)
 - `auth-service/` — Login, registration, JWT issuance/revocation (Phase 2; SSO/OAuth/MFA deferred to Phase 9)
+- `agent-registry/` — One agent profile per employee (Phase 3)
+- `llm-gateway/` — Provider abstraction over LLMs, Claude only for now (Phase 3; multi-provider is Phase 10)
 
 Every service that stores tenant-scoped data depends on `libs/tenancy` for
 its ORM base and session middleware, and every service that verifies or

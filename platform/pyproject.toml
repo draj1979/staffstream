@@ -9,6 +9,8 @@ dependencies = [
     "tenant-service",
     "employee-service",
     "auth-service",
+    "agent-registry",
+    "llm-gateway",
 ]
 
 [tool.uv]
@@ -23,6 +25,8 @@ auth = { workspace = true }
 tenant-service = { workspace = true }
 employee-service = { workspace = true }
 auth-service = { workspace = true }
+agent-registry = { workspace = true }
+llm-gateway = { workspace = true }
 
 [tool.ruff]
 target-version = "py312"

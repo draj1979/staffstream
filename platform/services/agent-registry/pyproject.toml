@@ -1,7 +1,7 @@
 [project]
-name = "employee-service"
+name = "agent-registry"
 version = "0.1.0"
-description = "Employee CRUD, AD/Google Workspace sync"
+description = "One agent profile per employee: model, prompt, temperature, memory namespace, knowledge sources, skills, permissions"
 requires-python = ">=3.12"
 dependencies = [
     "fastapi>=0.115",
@@ -9,9 +9,8 @@ dependencies = [
     "sqlalchemy[asyncio]>=2.0.36",
     "asyncpg>=0.30",
     "alembic>=1.14",
-    "pydantic[email]>=2.9",
+    "pydantic>=2.9",
     "pydantic-settings>=2.6",
-    "httpx>=0.27",
     "tenancy",
     "auth",
 ]
@@ -28,4 +27,4 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/employee_service"]
+packages = ["src/agent_registry"]

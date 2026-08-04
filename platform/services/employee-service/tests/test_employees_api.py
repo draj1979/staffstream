@@ -20,7 +20,7 @@ async def test_missing_authorization_header_is_401(client):
     assert resp.status_code == 401
 
 
-async def test_create_employee_with_system_token_bootstrap(client):
+async def test_create_employee_with_system_token_bootstrap(client, fake_agent_registry):
     resp = await client.post(
         "/employees",
         json={"email": "ada@acme.com", "department": "Engineering", "roles": ["engineer"]},
@@ -30,9 +30,27 @@ async def test_create_employee_with_system_token_bootstrap(client):
     body = resp.json()
     assert body["tenant_id"] == str(TENANT_A)
     assert body["email"] == "ada@acme.com"
+    assert body["employee_id"] in fake_agent_registry  # default agent was auto-created
+    assert body["agent_id"] == fake_agent_registry[body["employee_id"]]["agent_id"]
 
     resp = await client.get(f"/employees/{body['employee_id']}", headers=user_headers(TENANT_A))
     assert resp.status_code == 200
+
+
+async def test_agent_registry_failure_surfaces_as_502(client, monkeypatch):
+    from employee_service.agent_registry_client import AgentRegistryError
+
+    async def failing_create_default_agent(tenant_id, *, employee_id):
+        raise AgentRegistryError(500, "agent registry is down")
+
+    monkeypatch.setattr(
+        "employee_service.routers.employees.create_default_agent", failing_create_default_agent
+    )
+
+    resp = await client.post(
+        "/employees", json={"email": "unlucky@acme.com"}, headers=system_headers(TENANT_A)
+    )
+    assert resp.status_code == 502
 
 
 async def test_create_employee_with_user_token_also_works(client):

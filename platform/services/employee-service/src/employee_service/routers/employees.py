@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from auth import Principal, require_auth
 
 from .. import crud
+from ..agent_registry_client import AgentRegistryError, create_default_agent
 from ..db import get_db
 from ..schemas import EmployeeCreate, EmployeeOut, EmployeeUpdate
 
@@ -25,9 +26,16 @@ async def create_employee(
     db: AsyncSession = Depends(get_db),
 ):
     try:
-        return await crud.create_employee(db, data)
+        employee = await crud.create_employee(db, data)
     except crud.ManagerNotFoundError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+    try:
+        agent = await create_default_agent(principal.tenant_id, employee_id=employee.employee_id)
+    except AgentRegistryError as exc:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=exc.detail) from exc
+
+    return await crud.set_agent_id(db, employee, uuid.UUID(agent["agent_id"]))
 
 
 @router.get("", response_model=list[EmployeeOut])

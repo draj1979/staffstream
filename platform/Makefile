@@ -1,4 +1,5 @@
-.PHONY: up down logs lint test migrate run-tenant-service run-employee-service run-auth-service
+.PHONY: up down logs lint test migrate \
+	run-tenant-service run-employee-service run-auth-service run-agent-registry run-llm-gateway
 
 up:
 	docker compose up -d
@@ -19,6 +20,7 @@ migrate:
 	cd services/tenant-service && uv run alembic upgrade head
 	cd services/employee-service && uv run alembic upgrade head
 	cd services/auth-service && uv run alembic upgrade head
+	cd services/agent-registry && uv run alembic upgrade head
 
 run-tenant-service:
 	uv run uvicorn tenant_service.main:app --reload --port 8001 --app-dir services/tenant-service/src
@@ -28,3 +30,9 @@ run-employee-service:
 
 run-auth-service:
 	uv run uvicorn auth_service.main:app --reload --port 8003 --app-dir services/auth-service/src
+
+run-agent-registry:
+	uv run uvicorn agent_registry.main:app --reload --port 8004 --app-dir services/agent-registry/src
+
+run-llm-gateway:
+	uv run uvicorn llm_gateway.main:app --reload --port 8005 --app-dir services/llm-gateway/src

@@ -48,3 +48,10 @@ async def update_employee(db: AsyncSession, employee: Employee, data: EmployeeUp
     await db.commit()
     await db.refresh(employee)
     return employee
+
+
+async def set_agent_id(db: AsyncSession, employee: Employee, agent_id: uuid.UUID) -> Employee:
+    employee.agent_id = agent_id
+    await db.commit()
+    await db.refresh(employee)
+    return employee
