@@ -1,11 +1,12 @@
 # Services
 
-One service, one directory, one clear ownership boundary — no shared mutable
-state between services outside the message queue / DB (see root `CLAUDE.md`).
+One service, one directory, one clear ownership boundary — no shared
+mutable state between services outside the message queue / DB (see root
+`CLAUDE.md`). Each service owns its own Postgres database and its own
+Alembic migration history.
 
-This directory is currently empty: we are on **Phase 0 (walking skeleton)**.
-The first services (Tenant Service, Employee Service) land in Phase 1.
+- `tenant-service/` — Tenant CRUD, isolation, plan, billing, limits (Phase 1)
+- `employee-service/` — Employee CRUD, AD/Google Workspace sync (Phase 1)
 
-Each service, once added, will be a self-contained FastAPI app with its own
-`pyproject.toml`, tests, and Dockerfile, following whatever ORM base /
-tenant-isolation middleware is established for the platform.
+Every service that stores tenant-scoped data depends on `libs/tenancy` for
+its ORM base and session middleware — see the root [README](../README.md#tenant-isolation).

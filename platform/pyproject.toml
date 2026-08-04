@@ -3,18 +3,35 @@ name = "staffstream-platform"
 version = "0.0.1"
 description = "Multi-tenant enterprise AI agent platform (powered by OpenClaw) — monorepo root"
 requires-python = ">=3.12"
+dependencies = [
+    "tenancy",
+    "tenant-service",
+    "employee-service",
+]
+
+[tool.uv]
+package = false
+
+[tool.uv.workspace]
+members = ["libs/*", "services/*"]
+
+[tool.uv.sources]
+tenancy = { workspace = true }
+tenant-service = { workspace = true }
+employee-service = { workspace = true }
 
 [tool.ruff]
 target-version = "py312"
 line-length = 100
-src = ["services"]
+src = ["libs", "services"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]
+ignore = ["B008"]  # FastAPI's Depends()-as-default is the idiomatic pattern
 
 [tool.pytest.ini_options]
-testpaths = ["services", "tests"]
-pythonpath = ["services"]
+testpaths = ["libs", "services", "tests"]
+asyncio_mode = "auto"
 
 [dependency-groups]
-dev = ["ruff>=0.6", "pytest>=8.0"]
+dev = ["ruff>=0.6", "pytest>=8.0", "pytest-asyncio>=0.24", "aiosqlite>=0.20", "httpx>=0.27"]
