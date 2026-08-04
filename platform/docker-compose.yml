@@ -16,6 +16,27 @@ services:
       timeout: 5s
       retries: 5
 
+  # Separate instance (not the shared `postgres` container above) so the
+  # Knowledge Service's pgvector requirement never touches the other five
+  # services' database — also avoids swapping the shared container's base
+  # image (alpine/musl -> debian/glibc) under an existing data volume,
+  # which risks a collation mismatch for already-created text indexes.
+  postgres-vector:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: staffstream
+      POSTGRES_PASSWORD: staffstream
+      POSTGRES_DB: knowledge_service
+    ports:
+      - "5434:5432"
+    volumes:
+      - postgres_vector_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U staffstream"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
   redis:
     image: redis:7-alpine
     ports:
@@ -28,3 +49,4 @@ services:
 
 volumes:
   postgres_data:
+  postgres_vector_data:

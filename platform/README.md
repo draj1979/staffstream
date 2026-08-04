@@ -10,8 +10,9 @@ conventions.
 
 ## Current phase
 
-**Phase 4 — Memory Service (Postgres only; vector DB deferred).** (Knowledge
-Platform is Phase 5 — OpenClaw still stubs it.)
+**Phase 5 — Knowledge Platform: PDF/DOCX upload with pgvector retrieval.**
+(Other knowledge sources — SharePoint, Drive, Confluence, Notion, web, DB —
+are future work; only PDF/DOCX for now.)
 
 ## Stack
 
@@ -20,6 +21,7 @@ Platform is Phase 5 — OpenClaw still stubs it.)
 - Migrations: Alembic — CI: GitHub Actions
 - Auth: argon2 password hashing, HS256 JWT access tokens, opaque hashed refresh tokens
 - LLM: Anthropic Claude via the official SDK, behind a provider-abstraction interface
+- Embeddings: Voyage AI (`voyage-3-lite`, 512-dim) — Vector DB: pgvector
 
 ## Tenant isolation
 
@@ -142,14 +144,60 @@ successful LLM reply — it appends the user message and assistant reply as
 two new conversation turns; a failed LLM call (e.g. no `ANTHROPIC_API_KEY`)
 correctly stores nothing.
 
+## Knowledge Platform
+
+`services/knowledge-service` handles the three knowledge scopes from the
+HLD: **company** (tenant-wide), **department** (a department name string —
+Employee Service has no separate Department entity, so this keys off
+`Employee.department` directly), and **personal** (a single employee;
+always forced to the uploader's own `employee_id`, never settable to
+someone else's). Only PDF and DOCX for now.
+
+Pipeline (`POST /documents`, synchronous — no queue yet): extract text
+(`pypdf` / `python-docx`) → chunk (fixed-size sliding window with overlap,
+snapped to whitespace) → embed each chunk (Voyage AI) → store in pgvector,
+every row carrying `tenant_id` (through the standard tenancy filter, same
+as every other table) plus `scope`/`department`/`employee_id` denormalized
+from the parent document for fast filtering. A failed step marks the
+document `status: "failed"` with the real error message rather than
+leaving it stuck.
+
+`POST /search` embeds the query (Voyage, `input_type="query"` — chunks are
+embedded with `input_type="document"`; Voyage's models are tuned to expect
+that distinction) and ranks chunks by pgvector cosine distance, filtered to
+whatever scopes the caller passes: always company-wide, plus their
+department and/or employee_id if supplied. There's a test proving
+`tenant_id` remains the real isolation boundary even if two tenants
+happened to pick an identical `department` string.
+
+pgvector's similarity search is real Postgres SQL (the `<=>` operator) —
+there's no meaningful SQLite fallback for it, unlike every other service's
+tests. `services/knowledge-service`'s tests connect to a real
+Postgres+pgvector instance and **skip cleanly** (not fail) if one isn't
+reachable; `docker compose up -d postgres-vector` provides one locally
+(see below), and CI runs a dedicated job against a real
+`pgvector/pgvector:pg16` container. The embedding calls themselves are
+always mocked in tests — Voyage is a real paid API, and nothing needed to
+call it for real to prove the pgvector math works.
+
+OpenClaw's Load Knowledge step
+([knowledge.py](services/openclaw-runtime/src/openclaw_runtime/knowledge.py))
+fetches the employee's department from Employee Service (one more
+always-fresh HTTP call, no caching, same as everything else in OpenClaw),
+searches personal + that department + company-wide using the chat message
+itself as the query, and folds any results into the system prompt
+alongside memory.
+
 ## Local development
 
 ```bash
 cp .env.example .env
-make up       # start Postgres + Redis via docker-compose
+make up       # start Postgres + Redis + Postgres/pgvector via docker-compose
 make migrate  # run Alembic migrations for every service with a database
 make lint     # ruff
-make test     # pytest (fast, sqlite-backed; LLM Gateway tests never call the real Anthropic API)
+make test     # pytest (fast, sqlite-backed where possible; Knowledge Service
+              # skips cleanly without a live Postgres+pgvector; nothing ever
+              # calls the real Anthropic or Voyage AI APIs)
 make run-tenant-service     # http://localhost:8001
 make run-employee-service   # http://localhost:8002
 make run-auth-service       # http://localhost:8003
@@ -157,14 +205,19 @@ make run-agent-registry     # http://localhost:8004
 make run-llm-gateway        # http://localhost:8005
 make run-openclaw-runtime   # http://localhost:8006
 make run-memory-service     # http://localhost:8007
+make run-knowledge-service  # http://localhost:8008
 make down     # stop containers
 ```
 
 Postgres is exposed on host port **5433** (not 5432) to avoid clashing with
-any other local Postgres instance. `JWT_SECRET_KEY` must be identical across
-every service — see `.env.example`. `ANTHROPIC_API_KEY` is only needed to
-actually call Claude; without it the gateway still starts and routes
-correctly, calls just fail with a normal 401 from Anthropic.
+any other local Postgres instance; Knowledge Service's separate
+Postgres+pgvector instance is on **5434** (a dedicated container, not a
+retrofit of the shared one — see `docker-compose.yml`'s `postgres-vector`
+service). `JWT_SECRET_KEY` must be identical across every service — see
+`.env.example`. `ANTHROPIC_API_KEY` / `VOYAGE_API_KEY` are only needed to
+actually call Claude / Voyage; without them the services still start and
+route correctly, calls just fail with a normal auth error from the
+provider.
 
 ## Layout
 
@@ -178,8 +231,9 @@ services/
   auth-service/        Signup, login, refresh, logout — the only service touching credentials
   agent-registry/      One agent profile per employee: model, prompt, temperature, memory namespace, ...
   llm-gateway/          Provider abstraction over LLMs; Claude only for now
-  openclaw-runtime/     Stateless: POST /chat — loads agent + memory, calls LLM Gateway, stores the turn
+  openclaw-runtime/     Stateless: POST /chat — loads agent + memory + knowledge, calls LLM Gateway, stores the turn
   memory-service/       Per-employee memory: conversation, long-term, preferences, learned facts
+  knowledge-service/    Company/department/personal knowledge: PDF/DOCX -> chunks -> pgvector
 tests/                 root-level smoke tests
 docs/                  architecture and design docs
 infra/                 docker-compose init scripts, deployment infra

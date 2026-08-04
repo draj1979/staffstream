@@ -46,6 +46,21 @@ jobs:
           --health-interval 5s
           --health-timeout 5s
           --health-retries 5
+      # Separate instance, same as docker-compose.yml's postgres-vector —
+      # Knowledge Service is the only thing that needs pgvector.
+      postgres-vector:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: staffstream
+          POSTGRES_PASSWORD: staffstream
+          POSTGRES_DB: knowledge_service
+        ports:
+          - 5434:5432
+        options: >-
+          --health-cmd "pg_isready -U staffstream"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
     steps:
       - uses: actions/checkout@v4
 
@@ -100,3 +115,15 @@ jobs:
         env:
           MEMORY_SERVICE_DATABASE_URL: postgresql+asyncpg://staffstream:staffstream@localhost:5432/memory_service
         run: uv run alembic upgrade head
+
+      - name: Migrate knowledge-service against real Postgres+pgvector
+        working-directory: services/knowledge-service
+        env:
+          KNOWLEDGE_SERVICE_DATABASE_URL: postgresql+asyncpg://staffstream:staffstream@localhost:5434/knowledge_service
+        run: uv run alembic upgrade head
+
+      - name: Test knowledge-service against real Postgres+pgvector
+        working-directory: services/knowledge-service
+        env:
+          KNOWLEDGE_SERVICE_DATABASE_URL: postgresql+asyncpg://staffstream:staffstream@localhost:5434/knowledge_service
+        run: uv run pytest .

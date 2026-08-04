@@ -1,6 +1,8 @@
 import uuid
 
 import openclaw_runtime.runtime as runtime_module
+from openclaw_runtime import employee_client as employee_client_module
+from openclaw_runtime import knowledge_client as knowledge_client_module
 from openclaw_runtime import memory_client as memory_client_module
 
 from auth import encode_access_token
@@ -269,6 +271,117 @@ async def test_memory_service_failure_returns_502(client, monkeypatch):
 
     monkeypatch.setattr(runtime_module, "get_agent_for_employee", fake_get_agent)
     monkeypatch.setattr(memory_client_module, "get_conversation_history", fake_history)
+
+    resp = await client.post("/chat", json={"message": "hi"}, headers=headers)
+    assert resp.status_code == 502
+
+
+async def test_knowledge_results_are_folded_into_system_prompt(client, monkeypatch):
+    headers, _, employee_id = auth_headers()
+    agent = _agent()
+
+    async def fake_get_agent(emp_id, *, bearer_token):
+        return agent
+
+    async def fake_get_employee(emp_id, *, bearer_token):
+        assert emp_id == employee_id
+        return {"employee_id": str(emp_id), "department": "Engineering"}
+
+    captured_search = {}
+
+    async def fake_search_knowledge(*, bearer_token, query, department, employee_id, top_k=5):
+        captured_search.update(
+            query=query, department=department, employee_id=employee_id, top_k=top_k
+        )
+        return [
+            {
+                "chunk_id": str(uuid.uuid4()),
+                "document_id": str(uuid.uuid4()),
+                "filename": "handbook.pdf",
+                "scope": "company",
+                "content": "Our holiday policy allows unlimited PTO.",
+            }
+        ]
+
+    captured_generate = {}
+
+    async def fake_generate(**kwargs):
+        captured_generate.update(kwargs)
+        return _llm_response()
+
+    monkeypatch.setattr(runtime_module, "get_agent_for_employee", fake_get_agent)
+    monkeypatch.setattr(runtime_module, "generate", fake_generate)
+    monkeypatch.setattr(employee_client_module, "get_employee", fake_get_employee)
+    monkeypatch.setattr(knowledge_client_module, "search_knowledge", fake_search_knowledge)
+
+    resp = await client.post(
+        "/chat", json={"message": "what's our holiday policy?"}, headers=headers
+    )
+    assert resp.status_code == 200
+
+    assert captured_search["query"] == "what's our holiday policy?"
+    assert captured_search["department"] == "Engineering"
+    assert captured_search["employee_id"] == employee_id
+
+    assert "[handbook.pdf]" in captured_generate["system"]
+    assert "unlimited PTO" in captured_generate["system"]
+
+
+async def test_no_knowledge_results_omits_knowledge_section(client, monkeypatch):
+    headers, _, _ = auth_headers()
+    agent = _agent()
+
+    async def fake_get_agent(emp_id, *, bearer_token):
+        return agent
+
+    captured = {}
+
+    async def fake_generate(**kwargs):
+        captured.update(kwargs)
+        return _llm_response()
+
+    monkeypatch.setattr(runtime_module, "get_agent_for_employee", fake_get_agent)
+    monkeypatch.setattr(runtime_module, "generate", fake_generate)
+    # stub_knowledge_platform's default fake_search_knowledge already returns []
+
+    resp = await client.post("/chat", json={"message": "hi"}, headers=headers)
+    assert resp.status_code == 200
+    assert "Relevant knowledge" not in captured["system"]
+
+
+async def test_employee_service_failure_returns_502(client, monkeypatch):
+    headers, _, _ = auth_headers()
+    agent = _agent()
+
+    from openclaw_runtime.employee_client import EmployeeClientError
+
+    async def fake_get_agent(emp_id, *, bearer_token):
+        return agent
+
+    async def failing_get_employee(emp_id, *, bearer_token):
+        raise EmployeeClientError(500, "employee service is down")
+
+    monkeypatch.setattr(runtime_module, "get_agent_for_employee", fake_get_agent)
+    monkeypatch.setattr(employee_client_module, "get_employee", failing_get_employee)
+
+    resp = await client.post("/chat", json={"message": "hi"}, headers=headers)
+    assert resp.status_code == 502
+
+
+async def test_knowledge_service_failure_returns_502(client, monkeypatch):
+    headers, _, _ = auth_headers()
+    agent = _agent()
+
+    from openclaw_runtime.knowledge_client import KnowledgeClientError
+
+    async def fake_get_agent(emp_id, *, bearer_token):
+        return agent
+
+    async def failing_search(**kwargs):
+        raise KnowledgeClientError(500, "knowledge service is down")
+
+    monkeypatch.setattr(runtime_module, "get_agent_for_employee", fake_get_agent)
+    monkeypatch.setattr(knowledge_client_module, "search_knowledge", failing_search)
 
     resp = await client.post("/chat", json={"message": "hi"}, headers=headers)
     assert resp.status_code == 502

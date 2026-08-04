@@ -3,6 +3,8 @@ from fastapi import APIRouter, Depends, Header, HTTPException, status
 from auth import Principal, require_auth
 
 from ..agent_client import AgentClientError
+from ..employee_client import EmployeeClientError
+from ..knowledge_client import KnowledgeClientError
 from ..llm_client import LLMClientError
 from ..memory_client import MemoryClientError
 from ..runtime import run_chat_turn
@@ -35,4 +37,8 @@ async def chat(
     except LLMClientError as exc:
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=exc.detail) from exc
     except MemoryClientError as exc:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=exc.detail) from exc
+    except EmployeeClientError as exc:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=exc.detail) from exc
+    except KnowledgeClientError as exc:
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=exc.detail) from exc

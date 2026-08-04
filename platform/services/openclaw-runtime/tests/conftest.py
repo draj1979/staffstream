@@ -1,6 +1,6 @@
 import pytest
 from httpx import ASGITransport, AsyncClient
-from openclaw_runtime import memory_client
+from openclaw_runtime import employee_client, knowledge_client, memory_client
 from openclaw_runtime.main import app
 
 
@@ -35,6 +35,23 @@ def stub_memory_service(monkeypatch):
     monkeypatch.setattr(memory_client, "get_learned_facts", fake_get_learned_facts)
     monkeypatch.setattr(memory_client, "append_conversation_turn", fake_append_conversation_turn)
     return appended
+
+
+@pytest.fixture(autouse=True)
+def stub_knowledge_platform(monkeypatch):
+    """Stubs Employee Service (for department lookup) and Knowledge
+    Service (for retrieval) so chat tests don't need either running.
+    Defaults: no department, no matching knowledge — tests that care
+    override these via monkeypatch themselves."""
+
+    async def fake_get_employee(employee_id, *, bearer_token):
+        return {"employee_id": str(employee_id), "department": None}
+
+    async def fake_search_knowledge(*, bearer_token, query, department, employee_id, top_k=5):
+        return []
+
+    monkeypatch.setattr(employee_client, "get_employee", fake_get_employee)
+    monkeypatch.setattr(knowledge_client, "search_knowledge", fake_search_knowledge)
 
 
 @pytest.fixture

@@ -46,7 +46,7 @@ async def run_chat_turn(principal: Principal, message: str, *, bearer_token: str
 
     memory_context = await memory.load_context(memory_namespace, bearer_token=bearer_token)
     knowledge_context = await knowledge.load_knowledge_context(
-        principal.tenant_id, principal.employee_id, agent
+        principal.tenant_id, principal.employee_id, agent, bearer_token=bearer_token, query=message
     )
 
     system_prompt = _build_system_prompt(agent, memory_context, knowledge_context)
