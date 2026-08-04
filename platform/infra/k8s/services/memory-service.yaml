@@ -1,0 +1,50 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: memory-service
+  namespace: staffstream
+  labels:
+    app: memory-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: memory-service
+  template:
+    metadata:
+      labels:
+        app: memory-service
+    spec:
+      containers:
+        - name: memory-service
+          image: staffstream/memory-service:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8007
+          envFrom:
+            - configMapRef: {name: staffstream-config}
+            - secretRef: {name: staffstream-secrets}
+          livenessProbe:
+            httpGet: {path: /healthz, port: 8007}
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          readinessProbe:
+            httpGet: {path: /readyz, port: 8007}
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            failureThreshold: 3
+          resources:
+            requests: {cpu: "50m", memory: "128Mi"}
+            limits: {cpu: "500m", memory: "256Mi"}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: memory-service
+  namespace: staffstream
+spec:
+  selector:
+    app: memory-service
+  ports:
+    - port: 8007
+      targetPort: 8007

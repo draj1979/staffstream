@@ -1,0 +1,50 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: llm-gateway
+  namespace: staffstream
+  labels:
+    app: llm-gateway
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: llm-gateway
+  template:
+    metadata:
+      labels:
+        app: llm-gateway
+    spec:
+      containers:
+        - name: llm-gateway
+          image: staffstream/llm-gateway:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8005
+          envFrom:
+            - configMapRef: {name: staffstream-config}
+            - secretRef: {name: staffstream-secrets}
+          livenessProbe:
+            httpGet: {path: /healthz, port: 8005}
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          readinessProbe:
+            httpGet: {path: /readyz, port: 8005}
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            failureThreshold: 3
+          resources:
+            requests: {cpu: "50m", memory: "128Mi"}
+            limits: {cpu: "500m", memory: "256Mi"}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: llm-gateway
+  namespace: staffstream
+spec:
+  selector:
+    app: llm-gateway
+  ports:
+    - port: 8005
+      targetPort: 8005

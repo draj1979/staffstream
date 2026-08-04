@@ -12,7 +12,7 @@ and integrations — is the actual product.
 
 ## Build phase (update this as phases complete)
 
-Current phase: **5 — Knowledge Platform: PDF/DOCX upload + pgvector**
+Current phase: **6 — API Gateway, containerize, deploy to single k8s namespace**
 
 Do not implement components outside the current phase unless explicitly asked.
 Phases:

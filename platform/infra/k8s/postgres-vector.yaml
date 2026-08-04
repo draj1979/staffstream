@@ -1,0 +1,78 @@
+# Dedicated Postgres instance for knowledge-service only — pgvector image,
+# single database (knowledge_service), no init-db loop needed. See
+# postgres.yaml's comment and docker-compose.yml for why this is separate
+# from the main instance rather than one more database on it.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgres-vector-data
+  namespace: staffstream
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 5Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres-vector
+  namespace: staffstream
+  labels:
+    app: postgres-vector
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: postgres-vector
+  template:
+    metadata:
+      labels:
+        app: postgres-vector
+    spec:
+      containers:
+        - name: postgres-vector
+          image: pgvector/pgvector:pg16
+          ports:
+            - containerPort: 5432
+          env:
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef: {name: staffstream-secrets, key: POSTGRES_USER}
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef: {name: staffstream-secrets, key: POSTGRES_PASSWORD}
+            - name: POSTGRES_DB
+              value: "knowledge_service"
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+              subPath: pgdata
+          readinessProbe:
+            exec: {command: ["pg_isready", "-U", "staffstream"]}
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            exec: {command: ["pg_isready", "-U", "staffstream"]}
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          resources:
+            requests: {cpu: "100m", memory: "256Mi"}
+            limits: {cpu: "1", memory: "512Mi"}
+      volumes:
+        - name: data
+          persistentVolumeClaim: {claimName: postgres-vector-data}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres-vector
+  namespace: staffstream
+spec:
+  selector:
+    app: postgres-vector
+  ports:
+    - port: 5432
+      targetPort: 5432

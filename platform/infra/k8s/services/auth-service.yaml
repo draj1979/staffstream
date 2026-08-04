@@ -1,0 +1,50 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: auth-service
+  namespace: staffstream
+  labels:
+    app: auth-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: auth-service
+  template:
+    metadata:
+      labels:
+        app: auth-service
+    spec:
+      containers:
+        - name: auth-service
+          image: staffstream/auth-service:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8003
+          envFrom:
+            - configMapRef: {name: staffstream-config}
+            - secretRef: {name: staffstream-secrets}
+          livenessProbe:
+            httpGet: {path: /healthz, port: 8003}
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          readinessProbe:
+            httpGet: {path: /readyz, port: 8003}
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            failureThreshold: 3
+          resources:
+            requests: {cpu: "50m", memory: "128Mi"}
+            limits: {cpu: "500m", memory: "256Mi"}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: auth-service
+  namespace: staffstream
+spec:
+  selector:
+    app: auth-service
+  ports:
+    - port: 8003
+      targetPort: 8003

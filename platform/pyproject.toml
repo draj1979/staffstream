@@ -14,6 +14,7 @@ dependencies = [
     "openclaw-runtime",
     "memory-service",
     "knowledge-service",
+    "api-gateway",
 ]
 
 [tool.uv]
@@ -33,6 +34,7 @@ llm-gateway = { workspace = true }
 openclaw-runtime = { workspace = true }
 memory-service = { workspace = true }
 knowledge-service = { workspace = true }
+api-gateway = { workspace = true }
 
 [tool.ruff]
 target-version = "py312"

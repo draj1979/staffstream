@@ -1,0 +1,50 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: openclaw-runtime
+  namespace: staffstream
+  labels:
+    app: openclaw-runtime
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: openclaw-runtime
+  template:
+    metadata:
+      labels:
+        app: openclaw-runtime
+    spec:
+      containers:
+        - name: openclaw-runtime
+          image: staffstream/openclaw-runtime:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8006
+          envFrom:
+            - configMapRef: {name: staffstream-config}
+            - secretRef: {name: staffstream-secrets}
+          livenessProbe:
+            httpGet: {path: /healthz, port: 8006}
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          readinessProbe:
+            httpGet: {path: /readyz, port: 8006}
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            failureThreshold: 3
+          resources:
+            requests: {cpu: "50m", memory: "128Mi"}
+            limits: {cpu: "500m", memory: "256Mi"}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: openclaw-runtime
+  namespace: staffstream
+spec:
+  selector:
+    app: openclaw-runtime
+  ports:
+    - port: 8006
+      targetPort: 8006

@@ -1,0 +1,98 @@
+# Backs everything except knowledge-service (see postgres-vector.yaml) —
+# same split as docker-compose.yml, for the same reason: knowledge-service
+# needs the pgvector extension and its own image/collation, so it gets its
+# own instance rather than sharing this one.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-initdb
+  namespace: staffstream
+data:
+  init-db.sh: |
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    for db in tenant_service employee_service auth_service agent_registry memory_service; do
+      psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" <<-EOSQL
+        SELECT 'CREATE DATABASE $db' WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = '$db')\gexec
+    EOSQL
+    done
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: postgres-data
+  namespace: staffstream
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 5Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres
+  namespace: staffstream
+  labels:
+    app: postgres
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate # a single ReadWriteOnce volume can't do a rolling update
+  selector:
+    matchLabels:
+      app: postgres
+  template:
+    metadata:
+      labels:
+        app: postgres
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:16-alpine
+          ports:
+            - containerPort: 5432
+          env:
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef: {name: staffstream-secrets, key: POSTGRES_USER}
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef: {name: staffstream-secrets, key: POSTGRES_PASSWORD}
+            - name: POSTGRES_DB
+              value: "staffstream"
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+              subPath: pgdata # avoid postgres seeing the mount point's lost+found dir
+            - name: initdb
+              mountPath: /docker-entrypoint-initdb.d
+          readinessProbe:
+            exec: {command: ["pg_isready", "-U", "staffstream"]}
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            exec: {command: ["pg_isready", "-U", "staffstream"]}
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          resources:
+            requests: {cpu: "100m", memory: "256Mi"}
+            limits: {cpu: "1", memory: "512Mi"}
+      volumes:
+        - name: data
+          persistentVolumeClaim: {claimName: postgres-data}
+        - name: initdb
+          configMap: {name: postgres-initdb}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  namespace: staffstream
+spec:
+  selector:
+    app: postgres
+  ports:
+    - port: 5432
+      targetPort: 5432

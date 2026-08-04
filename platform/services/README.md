@@ -13,6 +13,12 @@ Alembic migration history.
 - `openclaw-runtime/` — Stateless agent execution: `POST /chat` (Phase 3; no database — nothing is cached in-process, everything is re-fetched from Agent Registry / Memory Service / Knowledge Service / LLM Gateway on every call)
 - `memory-service/` — Per-employee memory: conversation, long-term, preferences, learned facts/behaviour (Phase 4; Postgres only, vector DB deferred)
 - `knowledge-service/` — Company/department/personal knowledge: PDF/DOCX upload, chunking, Voyage AI embeddings, pgvector retrieval (Phase 5; its own dedicated Postgres+pgvector instance, not the shared one the other services use)
+- `api-gateway/` — Front door: per-tenant rate limiting, request size limits, centralized error sanitization, reverse proxy to every other service (Phase 6; no database — Redis-backed rate limiting only)
+
+Every service now has its own `Dockerfile` and a matching Deployment +
+Service in `infra/k8s/services/` (Phase 6) — see the root
+[README's Containers & Kubernetes section](../README.md#containers--kubernetes)
+and [infra/k8s/README.md](../infra/k8s/README.md).
 
 Every service that stores tenant-scoped data depends on `libs/tenancy` for
 its ORM base and session middleware, and every service that verifies or

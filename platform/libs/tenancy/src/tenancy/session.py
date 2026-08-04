@@ -5,7 +5,7 @@ the current tenant, with no per-query opt-in required.
 
 from collections.abc import AsyncIterator
 
-from sqlalchemy import event
+from sqlalchemy import event, text
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
@@ -79,3 +79,11 @@ async def get_session(
 ) -> AsyncIterator[AsyncSession]:
     async with session_factory() as session:
         yield session
+
+
+async def check_db_ready(engine: AsyncEngine) -> None:
+    """For a /readyz probe: raises if the DB isn't reachable right now.
+    Deliberately not used for /healthz — a DB blip shouldn't make k8s
+    restart a pod that's otherwise fine, only stop routing traffic to it."""
+    async with engine.connect() as conn:
+        await conn.execute(text("SELECT 1"))

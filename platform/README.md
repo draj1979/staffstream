@@ -10,9 +10,8 @@ conventions.
 
 ## Current phase
 
-**Phase 5 — Knowledge Platform: PDF/DOCX upload with pgvector retrieval.**
-(Other knowledge sources — SharePoint, Drive, Confluence, Notion, web, DB —
-are future work; only PDF/DOCX for now.)
+**Phase 6 — Harden the API Gateway, containerize the platform, deploy to a
+single k8s namespace.**
 
 ## Stack
 
@@ -22,6 +21,7 @@ are future work; only PDF/DOCX for now.)
 - Auth: argon2 password hashing, HS256 JWT access tokens, opaque hashed refresh tokens
 - LLM: Anthropic Claude via the official SDK, behind a provider-abstraction interface
 - Embeddings: Voyage AI (`voyage-3-lite`, 512-dim) — Vector DB: pgvector
+- Containers: one Dockerfile per service — Orchestration: Kubernetes (single namespace)
 
 ## Tenant isolation
 
@@ -188,6 +188,52 @@ searches personal + that department + company-wide using the chat message
 itself as the query, and folds any results into the system prompt
 alongside memory.
 
+## API Gateway
+
+`services/api-gateway` is the one front door — every other service's
+Service should stay ClusterIP-only in a real deployment; this is the only
+one meant to be reachable from outside the cluster (see its k8s manifest).
+It reverse-proxies by path prefix (`/tenants` -> Tenant Service, `/chat` ->
+OpenClaw Runtime, etc. — see
+[routing.py](services/api-gateway/src/api_gateway/routing.py)) and adds
+three things no individual backend service has on its own:
+
+- **Per-tenant rate limiting** — a Redis-backed fixed-window counter
+  ([rate_limit.py](services/api-gateway/src/api_gateway/rate_limit.py)),
+  keyed by the `tenant_id` claim from the caller's JWT (verified, so a
+  client can't dodge its own limit by forging the claim), falling back to
+  the `X-Tenant-Id` header or the client IP for pre-auth routes like
+  signup. One tenant maxing out its quota never touches anyone else's
+  bucket. This is deliberately *not* an authorization check — the gateway
+  never rejects a request for a missing/invalid/expired token; that's
+  still each backend's own `require_auth`, exactly as before.
+- **Request size limits** — a fast `Content-Length` pre-check plus a real
+  streaming byte-count guard (so a lying header can't bypass it), with a
+  much higher ceiling for knowledge-service's upload path than everywhere
+  else.
+- **Centralized error sanitization** — any 5xx from a backend (or a
+  proxying failure like a timeout) gets its body replaced with a generic
+  `{"detail": "..."}` message before it ever reaches the client; whatever
+  the backend actually said — stack trace, DB error text, anything — is
+  logged server-side and never forwarded. 4xx responses pass through
+  unchanged, since those are messages the backend already wrote to be
+  client-safe.
+
+## Containers & Kubernetes
+
+Every service has its own `Dockerfile` (multi-stage, `uv`-based, built
+from the repo root since this is a uv workspace — see any service's
+Dockerfile for the exact command). `make docker-build` builds all nine.
+`infra/k8s/` has Deployment + Service manifests for all nine plus the
+namespace, ConfigMap, Secret template, and in-cluster Postgres/Redis —
+see [infra/k8s/README.md](infra/k8s/README.md) for the full deploy flow.
+Every Deployment's `livenessProbe` hits `/healthz` (process alive — never
+checks dependencies, so a DB blip doesn't get the pod restarted) and its
+`readinessProbe` hits `/readyz` (DB-backed services actually check DB
+connectivity; stateless ones just confirm the process is up) — so k8s
+stops routing traffic to a pod that can't actually serve, without
+restarting a pod that just needs its dependency to come back.
+
 ## Local development
 
 ```bash
@@ -206,8 +252,16 @@ make run-llm-gateway        # http://localhost:8005
 make run-openclaw-runtime   # http://localhost:8006
 make run-memory-service     # http://localhost:8007
 make run-knowledge-service  # http://localhost:8008
+make run-api-gateway        # http://localhost:8000
 make down     # stop containers
+
+make docker-build   # build all 9 service images (staffstream/<service>:latest)
 ```
+
+To try the whole platform containerized rather than via `make run-*`, see
+[infra/k8s/README.md](infra/k8s/README.md) — or run individual images
+directly with `docker run` (each `Dockerfile`'s header comment has the
+exact build command).
 
 Postgres is exposed on host port **5433** (not 5432) to avoid clashing with
 any other local Postgres instance; Knowledge Service's separate
@@ -234,7 +288,12 @@ services/
   openclaw-runtime/     Stateless: POST /chat — loads agent + memory + knowledge, calls LLM Gateway, stores the turn
   memory-service/       Per-employee memory: conversation, long-term, preferences, learned facts
   knowledge-service/    Company/department/personal knowledge: PDF/DOCX -> chunks -> pgvector
+  api-gateway/          Front door: per-tenant rate limiting, size limits, sanitized errors, reverse proxy
 tests/                 root-level smoke tests
 docs/                  architecture and design docs
-infra/                 docker-compose init scripts, deployment infra
+infra/
+  docker/               docker-compose init scripts
+  k8s/                  Deployment/Service/ConfigMap/Secret manifests, single namespace
 ```
+
+Every service directory also has its own `Dockerfile`.

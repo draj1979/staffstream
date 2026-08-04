@@ -1,0 +1,28 @@
+# Non-secret configuration only — every value here is safe to read.
+# Database URLs live in secret.yaml instead: even though they're mostly
+# internal service-to-service hostnames, they embed the DB password.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: staffstream-config
+  namespace: staffstream
+data:
+  REDIS_URL: "redis://redis:6379/0"
+
+  EMPLOYEE_SERVICE_AGENT_REGISTRY_URL: "http://agent-registry:8004"
+  AUTH_SERVICE_EMPLOYEE_SERVICE_URL: "http://employee-service:8002"
+
+  OPENCLAW_RUNTIME_AGENT_REGISTRY_URL: "http://agent-registry:8004"
+  OPENCLAW_RUNTIME_LLM_GATEWAY_URL: "http://llm-gateway:8005"
+  OPENCLAW_RUNTIME_MEMORY_SERVICE_URL: "http://memory-service:8007"
+  OPENCLAW_RUNTIME_EMPLOYEE_SERVICE_URL: "http://employee-service:8002"
+  OPENCLAW_RUNTIME_KNOWLEDGE_SERVICE_URL: "http://knowledge-service:8008"
+
+  API_GATEWAY_TENANT_SERVICE_URL: "http://tenant-service:8001"
+  API_GATEWAY_EMPLOYEE_SERVICE_URL: "http://employee-service:8002"
+  API_GATEWAY_AUTH_SERVICE_URL: "http://auth-service:8003"
+  API_GATEWAY_AGENT_REGISTRY_URL: "http://agent-registry:8004"
+  API_GATEWAY_LLM_GATEWAY_URL: "http://llm-gateway:8005"
+  API_GATEWAY_OPENCLAW_RUNTIME_URL: "http://openclaw-runtime:8006"
+  API_GATEWAY_MEMORY_SERVICE_URL: "http://memory-service:8007"
+  API_GATEWAY_KNOWLEDGE_SERVICE_URL: "http://knowledge-service:8008"

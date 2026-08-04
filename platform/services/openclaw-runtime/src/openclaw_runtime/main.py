@@ -9,3 +9,9 @@ app.include_router(chat_router)
 @app.get("/healthz")
 async def healthz():
     return {"status": "ok"}
+
+
+@app.get("/readyz")
+async def readyz():
+    # No database of its own — ready as soon as the process is up.
+    return {"status": "ready"}

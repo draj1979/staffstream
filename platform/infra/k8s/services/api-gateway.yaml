@@ -1,0 +1,58 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api-gateway
+  namespace: staffstream
+  labels:
+    app: api-gateway
+spec:
+  # Safe to run more than one replica: rate limiting is Redis-backed
+  # (shared across replicas), not an in-process counter.
+  replicas: 2
+  selector:
+    matchLabels:
+      app: api-gateway
+  template:
+    metadata:
+      labels:
+        app: api-gateway
+    spec:
+      containers:
+        - name: api-gateway
+          image: staffstream/api-gateway:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8000
+          envFrom:
+            - configMapRef: {name: staffstream-config}
+            - secretRef: {name: staffstream-secrets}
+          livenessProbe:
+            httpGet: {path: /healthz, port: 8000}
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          readinessProbe:
+            httpGet: {path: /readyz, port: 8000}
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            failureThreshold: 3
+          resources:
+            requests: {cpu: "100m", memory: "128Mi"}
+            limits: {cpu: "500m", memory: "256Mi"}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: api-gateway
+  namespace: staffstream
+spec:
+  # The one Service in this namespace meant to be reachable from outside
+  # the cluster. On a real cloud cluster this provisions an external LB;
+  # for local kind/minikube testing, `kubectl port-forward` is the
+  # practical alternative (LoadBalancer stays Pending without something
+  # like metallb installed).
+  type: LoadBalancer
+  selector:
+    app: api-gateway
+  ports:
+    - port: 80
+      targetPort: 8000

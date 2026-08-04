@@ -1,0 +1,50 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tenant-service
+  namespace: staffstream
+  labels:
+    app: tenant-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: tenant-service
+  template:
+    metadata:
+      labels:
+        app: tenant-service
+    spec:
+      containers:
+        - name: tenant-service
+          image: staffstream/tenant-service:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8001
+          envFrom:
+            - configMapRef: {name: staffstream-config}
+            - secretRef: {name: staffstream-secrets}
+          livenessProbe:
+            httpGet: {path: /healthz, port: 8001}
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          readinessProbe:
+            httpGet: {path: /readyz, port: 8001}
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            failureThreshold: 3
+          resources:
+            requests: {cpu: "50m", memory: "128Mi"}
+            limits: {cpu: "500m", memory: "256Mi"}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: tenant-service
+  namespace: staffstream
+spec:
+  selector:
+    app: tenant-service
+  ports:
+    - port: 8001
+      targetPort: 8001

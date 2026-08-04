@@ -1,0 +1,13 @@
+.git
+.venv
+.env
+.env.*
+!.env.example
+.pytest_cache
+.ruff_cache
+__pycache__
+**/__pycache__
+*.pyc
+.DS_Store
+docs
+infra/k8s

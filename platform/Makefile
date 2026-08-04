@@ -1,6 +1,9 @@
 .PHONY: up down logs lint test migrate \
 	run-tenant-service run-employee-service run-auth-service run-agent-registry run-llm-gateway \
-	run-openclaw-runtime run-memory-service run-knowledge-service
+	run-openclaw-runtime run-memory-service run-knowledge-service run-api-gateway \
+	docker-build docker-build-tenant-service docker-build-employee-service docker-build-auth-service \
+	docker-build-agent-registry docker-build-llm-gateway docker-build-openclaw-runtime \
+	docker-build-memory-service docker-build-knowledge-service docker-build-api-gateway
 
 up:
 	docker compose up -d
@@ -48,3 +51,39 @@ run-memory-service:
 
 run-knowledge-service:
 	uv run uvicorn knowledge_service.main:app --reload --port 8008 --app-dir services/knowledge-service/src
+
+run-api-gateway:
+	uv run uvicorn api_gateway.main:app --reload --port 8000 --app-dir services/api-gateway/src
+
+# Each image is built from the repo root (uv workspace — every service
+# depends on sibling libs/ packages), one Dockerfile per service.
+docker-build: docker-build-tenant-service docker-build-employee-service docker-build-auth-service \
+	docker-build-agent-registry docker-build-llm-gateway docker-build-openclaw-runtime \
+	docker-build-memory-service docker-build-knowledge-service docker-build-api-gateway
+
+docker-build-tenant-service:
+	docker build -f services/tenant-service/Dockerfile -t staffstream/tenant-service:latest .
+
+docker-build-employee-service:
+	docker build -f services/employee-service/Dockerfile -t staffstream/employee-service:latest .
+
+docker-build-auth-service:
+	docker build -f services/auth-service/Dockerfile -t staffstream/auth-service:latest .
+
+docker-build-agent-registry:
+	docker build -f services/agent-registry/Dockerfile -t staffstream/agent-registry:latest .
+
+docker-build-llm-gateway:
+	docker build -f services/llm-gateway/Dockerfile -t staffstream/llm-gateway:latest .
+
+docker-build-openclaw-runtime:
+	docker build -f services/openclaw-runtime/Dockerfile -t staffstream/openclaw-runtime:latest .
+
+docker-build-memory-service:
+	docker build -f services/memory-service/Dockerfile -t staffstream/memory-service:latest .
+
+docker-build-knowledge-service:
+	docker build -f services/knowledge-service/Dockerfile -t staffstream/knowledge-service:latest .
+
+docker-build-api-gateway:
+	docker build -f services/api-gateway/Dockerfile -t staffstream/api-gateway:latest .

@@ -1,0 +1,50 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: agent-registry
+  namespace: staffstream
+  labels:
+    app: agent-registry
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: agent-registry
+  template:
+    metadata:
+      labels:
+        app: agent-registry
+    spec:
+      containers:
+        - name: agent-registry
+          image: staffstream/agent-registry:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8004
+          envFrom:
+            - configMapRef: {name: staffstream-config}
+            - secretRef: {name: staffstream-secrets}
+          livenessProbe:
+            httpGet: {path: /healthz, port: 8004}
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          readinessProbe:
+            httpGet: {path: /readyz, port: 8004}
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            failureThreshold: 3
+          resources:
+            requests: {cpu: "50m", memory: "128Mi"}
+            limits: {cpu: "500m", memory: "256Mi"}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: agent-registry
+  namespace: staffstream
+spec:
+  selector:
+    app: agent-registry
+  ports:
+    - port: 8004
+      targetPort: 8004

@@ -8,7 +8,7 @@ from .context import (
 )
 from .errors import TenantContextError, TenantMismatchError
 from .middleware import tenant_context
-from .session import get_session, make_engine, make_session_factory
+from .session import check_db_ready, get_session, make_engine, make_session_factory
 
 __all__ = [
     "Base",
@@ -24,4 +24,5 @@ __all__ = [
     "make_engine",
     "make_session_factory",
     "get_session",
+    "check_db_ready",
 ]

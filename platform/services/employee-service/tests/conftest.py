@@ -1,6 +1,7 @@
 import uuid
 
 import pytest
+from employee_service import db
 from employee_service.db import get_db
 from employee_service.main import app
 from httpx import ASGITransport, AsyncClient
@@ -32,11 +33,12 @@ def fake_agent_registry(monkeypatch):
 
 
 @pytest.fixture
-async def client():
+async def client(monkeypatch):
     engine = make_engine("sqlite+aiosqlite:///:memory:")
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     session_factory = make_session_factory(engine)
+    monkeypatch.setattr(db, "engine", engine)  # so /readyz checks the test DB, not the real one
 
     async def override_get_db() -> AsyncSession:
         async with session_factory() as session:

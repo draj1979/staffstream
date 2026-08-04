@@ -10,6 +10,7 @@ resolution-markers = [
 [manifest]
 members = [
     "agent-registry",
+    "api-gateway",
     "auth",
     "auth-service",
     "employee-service",
@@ -262,6 +263,34 @@ sdist = { url = "https://files.pythonhosted.org/packages/61/cc/a381afa6efea9f496
 wheels = [
     { url = "https://files.pythonhosted.org/packages/da/35/f2287558c17e29fafc8ef3daf819bb9834061cfa43bff8014f7df7f63bdc/anyio-4.14.2-py3-none-any.whl", hash = "sha256:9f505dda5ac9f0c8309b5e8bd445a8c2bf7246f3ce950121e45ea15bc41d1494", size = 125813, upload-time = "2026-07-12T20:29:05.763Z" },
 ]
+
+[[package]]
+name = "api-gateway"
+version = "0.1.0"
+source = { editable = "services/api-gateway" }
+dependencies = [
+    { name = "auth" },
+    { name = "fastapi" },
+    { name = "httpx" },
+    { name = "pydantic" },
+    { name = "pydantic-settings" },
+    { name = "redis" },
+    { name = "uvicorn", extra = ["standard"] },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "auth", editable = "libs/auth" },
+    { name = "fastapi", specifier = ">=0.115" },
+    { name = "httpx", specifier = ">=0.27" },
+    { name = "pydantic", specifier = ">=2.9" },
+    { name = "pydantic-settings", specifier = ">=2.6" },
+    { name = "redis", specifier = ">=5.0" },
+    { name = "uvicorn", extras = ["standard"], specifier = ">=0.32" },
+]
+
+[package.metadata.requires-dev]
+dev = []
 
 [[package]]
 name = "argon2-cffi"
@@ -2108,6 +2137,15 @@ wheels = [
 ]
 
 [[package]]
+name = "redis"
+version = "8.1.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/a8/99/604f0b666d4c616d891cf77ebb9db6bb21601344c051aebf1b72b9ff915f/redis-8.1.0.tar.gz", hash = "sha256:6e1a19beef9225c83efd689c7e6b7da2d5215b1f42cd13b7fc3714d0a09c7b25", size = 5254356, upload-time = "2026-07-30T08:51:00.269Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/66/9d/c5731f6e3608663d4d3656fd8d3aecee8b509c3082818f5a13eae925baea/redis-8.1.0-py3-none-any.whl", hash = "sha256:a4fe1aac3d3b3cc791d4b3d5931c5a956045dc951ee74d1c913ee3ac4d2ee9fb", size = 560618, upload-time = "2026-07-30T08:50:58.497Z" },
+]
+
+[[package]]
 name = "requests"
 version = "2.34.2"
 source = { registry = "https://pypi.org/simple" }
@@ -2220,6 +2258,7 @@ version = "0.0.1"
 source = { virtual = "." }
 dependencies = [
     { name = "agent-registry" },
+    { name = "api-gateway" },
     { name = "auth" },
     { name = "auth-service" },
     { name = "employee-service" },
@@ -2243,6 +2282,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "agent-registry", editable = "services/agent-registry" },
+    { name = "api-gateway", editable = "services/api-gateway" },
     { name = "auth", editable = "libs/auth" },
     { name = "auth-service", editable = "services/auth-service" },
     { name = "employee-service", editable = "services/employee-service" },
