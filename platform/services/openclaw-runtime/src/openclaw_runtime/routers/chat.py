@@ -4,6 +4,7 @@ from auth import Principal, require_auth
 
 from ..agent_client import AgentClientError
 from ..llm_client import LLMClientError
+from ..memory_client import MemoryClientError
 from ..runtime import run_chat_turn
 from ..schemas import ChatRequest, ChatResponse
 
@@ -32,4 +33,6 @@ async def chat(
             ) from exc
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=exc.detail) from exc
     except LLMClientError as exc:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=exc.detail) from exc
+    except MemoryClientError as exc:
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=exc.detail) from exc

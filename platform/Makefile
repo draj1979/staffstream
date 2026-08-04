@@ -1,6 +1,6 @@
 .PHONY: up down logs lint test migrate \
 	run-tenant-service run-employee-service run-auth-service run-agent-registry run-llm-gateway \
-	run-openclaw-runtime
+	run-openclaw-runtime run-memory-service
 
 up:
 	docker compose up -d
@@ -22,6 +22,7 @@ migrate:
 	cd services/employee-service && uv run alembic upgrade head
 	cd services/auth-service && uv run alembic upgrade head
 	cd services/agent-registry && uv run alembic upgrade head
+	cd services/memory-service && uv run alembic upgrade head
 
 run-tenant-service:
 	uv run uvicorn tenant_service.main:app --reload --port 8001 --app-dir services/tenant-service/src
@@ -40,3 +41,6 @@ run-llm-gateway:
 
 run-openclaw-runtime:
 	uv run uvicorn openclaw_runtime.main:app --reload --port 8006 --app-dir services/openclaw-runtime/src
+
+run-memory-service:
+	uv run uvicorn memory_service.main:app --reload --port 8007 --app-dir services/memory-service/src

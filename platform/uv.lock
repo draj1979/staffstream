@@ -13,6 +13,7 @@ members = [
     "auth-service",
     "employee-service",
     "llm-gateway",
+    "memory-service",
     "openclaw-runtime",
     "staffstream-platform",
     "tenancy",
@@ -827,6 +828,43 @@ wheels = [
 ]
 
 [[package]]
+name = "memory-service"
+version = "0.1.0"
+source = { editable = "services/memory-service" }
+dependencies = [
+    { name = "alembic" },
+    { name = "asyncpg" },
+    { name = "auth" },
+    { name = "fastapi" },
+    { name = "pydantic" },
+    { name = "pydantic-settings" },
+    { name = "sqlalchemy", extra = ["asyncio"] },
+    { name = "tenancy" },
+    { name = "uvicorn", extra = ["standard"] },
+]
+
+[package.dev-dependencies]
+dev = [
+    { name = "aiosqlite" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "alembic", specifier = ">=1.14" },
+    { name = "asyncpg", specifier = ">=0.30" },
+    { name = "auth", editable = "libs/auth" },
+    { name = "fastapi", specifier = ">=0.115" },
+    { name = "pydantic", specifier = ">=2.9" },
+    { name = "pydantic-settings", specifier = ">=2.6" },
+    { name = "sqlalchemy", extras = ["asyncio"], specifier = ">=2.0.36" },
+    { name = "tenancy", editable = "libs/tenancy" },
+    { name = "uvicorn", extras = ["standard"], specifier = ">=0.32" },
+]
+
+[package.metadata.requires-dev]
+dev = [{ name = "aiosqlite", specifier = ">=0.20" }]
+
+[[package]]
 name = "openclaw-runtime"
 version = "0.1.0"
 source = { editable = "services/openclaw-runtime" }
@@ -1180,6 +1218,7 @@ dependencies = [
     { name = "auth-service" },
     { name = "employee-service" },
     { name = "llm-gateway" },
+    { name = "memory-service" },
     { name = "openclaw-runtime" },
     { name = "tenancy" },
     { name = "tenant-service" },
@@ -1201,6 +1240,7 @@ requires-dist = [
     { name = "auth-service", editable = "services/auth-service" },
     { name = "employee-service", editable = "services/employee-service" },
     { name = "llm-gateway", editable = "services/llm-gateway" },
+    { name = "memory-service", editable = "services/memory-service" },
     { name = "openclaw-runtime", editable = "services/openclaw-runtime" },
     { name = "tenancy", editable = "libs/tenancy" },
     { name = "tenant-service", editable = "services/tenant-service" },

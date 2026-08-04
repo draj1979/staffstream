@@ -10,7 +10,8 @@ Alembic migration history.
 - `auth-service/` — Login, registration, JWT issuance/revocation (Phase 2; SSO/OAuth/MFA deferred to Phase 9)
 - `agent-registry/` — One agent profile per employee (Phase 3)
 - `llm-gateway/` — Provider abstraction over LLMs, Claude only for now (Phase 3; multi-provider is Phase 10)
-- `openclaw-runtime/` — Stateless agent execution: `POST /chat` (Phase 3; no database — nothing is cached in-process, everything is re-fetched from Agent Registry / LLM Gateway on every call)
+- `openclaw-runtime/` — Stateless agent execution: `POST /chat` (Phase 3; no database — nothing is cached in-process, everything is re-fetched from Agent Registry / Memory Service / LLM Gateway on every call)
+- `memory-service/` — Per-employee memory: conversation, long-term, preferences, learned facts/behaviour (Phase 4; Postgres only, vector DB deferred)
 
 Every service that stores tenant-scoped data depends on `libs/tenancy` for
 its ORM base and session middleware, and every service that verifies or

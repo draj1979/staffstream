@@ -12,7 +12,7 @@ and integrations — is the actual product.
 
 ## Build phase (update this as phases complete)
 
-Current phase: **3 — Agent Registry + LLM Gateway (Claude only for now) + OpenClaw wiring**
+Current phase: **4 — Memory Service (Postgres only; vector DB deferred)**
 
 Do not implement components outside the current phase unless explicitly asked.
 Phases:

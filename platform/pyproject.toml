@@ -12,6 +12,7 @@ dependencies = [
     "agent-registry",
     "llm-gateway",
     "openclaw-runtime",
+    "memory-service",
 ]
 
 [tool.uv]
@@ -29,6 +30,7 @@ auth-service = { workspace = true }
 agent-registry = { workspace = true }
 llm-gateway = { workspace = true }
 openclaw-runtime = { workspace = true }
+memory-service = { workspace = true }
 
 [tool.ruff]
 target-version = "py312"

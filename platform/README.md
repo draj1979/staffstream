@@ -10,9 +10,8 @@ conventions.
 
 ## Current phase
 
-**Phase 3 — Agent Registry + LLM Gateway (Claude only for now) + OpenClaw
-wiring.** (Multi-provider support is Phase 10; Memory and Knowledge Platform
-are Phases 4 and 5 — OpenClaw currently stubs both.)
+**Phase 4 — Memory Service (Postgres only; vector DB deferred).** (Knowledge
+Platform is Phase 5 — OpenClaw still stubs it.)
 
 ## Stack
 
@@ -109,18 +108,39 @@ Registry, and calls LLM Gateway with the agent's model/prompt/temperature to
 produce a reply.
 
 It's deliberately stateless — the whole point of "OpenClaw itself is
-stateless" from CLAUDE.md. Every `/chat` call re-fetches the agent from
-Agent Registry over HTTP; nothing is cached in the process between
-requests, so changing an agent's model or prompt takes effect on the very
-next message with no restart or cache invalidation anywhere (see
+stateless" from CLAUDE.md. Every `/chat` call re-fetches the agent and its
+memory from their owning services over HTTP; nothing is cached in the
+process between requests, so changing an agent's model, prompt, or memory
+takes effect on the very next message with no restart or cache
+invalidation anywhere (see
 [runtime.py](services/openclaw-runtime/src/openclaw_runtime/runtime.py) and
-its no-caching test). It forwards the caller's own bearer token to both
-Agent Registry and LLM Gateway rather than minting a new one — the caller
-already has a valid session, so there's no separate identity to establish.
-[memory.py](services/openclaw-runtime/src/openclaw_runtime/memory.py) and
+its no-caching test). It forwards the caller's own bearer token to Agent
+Registry, Memory Service, and LLM Gateway rather than minting a new one —
+the caller already has a valid session, so there's no separate identity to
+establish.
 [knowledge.py](services/openclaw-runtime/src/openclaw_runtime/knowledge.py)
-are no-op stubs with the real service's eventual signature — Phases 4 and 5
-replace their bodies, not their callers.
+is still a no-op stub with the real service's eventual signature — Phase 5
+replaces its body, not its callers.
+
+## Memory Service
+
+`services/memory-service` — Postgres only, vector DB deferred — stores four
+kinds of per-employee memory, all scoped by `(tenant_id, memory_namespace)`:
+conversation history (append-only, chronological), long-term memory notes,
+preferences (key/value, upserted), and learned facts. `memory_namespace` is
+the same value as the owning Agent's `memory_namespace` from Phase 3 — it's
+the partition key the API is organized around (`/memory/{memory_namespace}/...`).
+`tenant_id` still goes through the standard tenancy filter on every query
+regardless of what the namespace string happens to be, so even a namespace
+collision across tenants can't leak data (there's a test for exactly this).
+
+OpenClaw's Load Memory step ([memory.py](services/openclaw-runtime/src/openclaw_runtime/memory.py))
+fetches all four kinds before calling the LLM: conversation history feeds
+the messages list, and long-term/preferences/facts get folded into the
+system prompt alongside personality. Store Memory happens only after a
+successful LLM reply — it appends the user message and assistant reply as
+two new conversation turns; a failed LLM call (e.g. no `ANTHROPIC_API_KEY`)
+correctly stores nothing.
 
 ## Local development
 
@@ -136,6 +156,7 @@ make run-auth-service       # http://localhost:8003
 make run-agent-registry     # http://localhost:8004
 make run-llm-gateway        # http://localhost:8005
 make run-openclaw-runtime   # http://localhost:8006
+make run-memory-service     # http://localhost:8007
 make down     # stop containers
 ```
 
@@ -157,7 +178,8 @@ services/
   auth-service/        Signup, login, refresh, logout — the only service touching credentials
   agent-registry/      One agent profile per employee: model, prompt, temperature, memory namespace, ...
   llm-gateway/          Provider abstraction over LLMs; Claude only for now
-  openclaw-runtime/     Stateless: POST /chat — loads agent, calls LLM Gateway, returns the reply
+  openclaw-runtime/     Stateless: POST /chat — loads agent + memory, calls LLM Gateway, stores the turn
+  memory-service/       Per-employee memory: conversation, long-term, preferences, learned facts
 tests/                 root-level smoke tests
 docs/                  architecture and design docs
 infra/                 docker-compose init scripts, deployment infra

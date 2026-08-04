@@ -8,6 +8,7 @@ class Settings(BaseSettings):
 
     agent_registry_url: str = "http://localhost:8004"
     llm_gateway_url: str = "http://localhost:8005"
+    memory_service_url: str = "http://localhost:8007"
 
 
 settings = Settings()

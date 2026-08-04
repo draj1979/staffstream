@@ -1,6 +1,7 @@
 import uuid
 
 import openclaw_runtime.runtime as runtime_module
+from openclaw_runtime import memory_client as memory_client_module
 
 from auth import encode_access_token
 
@@ -159,6 +160,115 @@ async def test_llm_gateway_failure_returns_502(client, monkeypatch):
 
     monkeypatch.setattr(runtime_module, "get_agent_for_employee", fake_get_agent)
     monkeypatch.setattr(runtime_module, "generate", fake_generate)
+
+    resp = await client.post("/chat", json={"message": "hi"}, headers=headers)
+    assert resp.status_code == 502
+
+
+async def test_conversation_history_is_fed_into_llm_messages(client, monkeypatch):
+    headers, _, employee_id = auth_headers()
+    agent = _agent(memory_namespace="ns-1")
+
+    async def fake_get_agent(emp_id, *, bearer_token):
+        return agent
+
+    async def fake_history(memory_namespace, *, bearer_token, limit=20):
+        assert memory_namespace == "ns-1"
+        return [
+            {"role": "user", "content": "earlier question"},
+            {"role": "assistant", "content": "earlier answer"},
+        ]
+
+    captured = {}
+
+    async def fake_generate(**kwargs):
+        captured.update(kwargs)
+        return _llm_response()
+
+    monkeypatch.setattr(runtime_module, "get_agent_for_employee", fake_get_agent)
+    monkeypatch.setattr(runtime_module, "generate", fake_generate)
+    monkeypatch.setattr(memory_client_module, "get_conversation_history", fake_history)
+
+    resp = await client.post("/chat", json={"message": "follow-up"}, headers=headers)
+    assert resp.status_code == 200
+    assert captured["messages"] == [
+        {"role": "user", "content": "earlier question"},
+        {"role": "assistant", "content": "earlier answer"},
+        {"role": "user", "content": "follow-up"},
+    ]
+
+
+async def test_preferences_long_term_and_facts_are_folded_into_system_prompt(client, monkeypatch):
+    headers, _, _ = auth_headers()
+    agent = _agent()
+
+    async def fake_get_agent(emp_id, *, bearer_token):
+        return agent
+
+    async def fake_prefs(memory_namespace, *, bearer_token):
+        return [{"key": "tone", "value": "casual"}]
+
+    async def fake_long_term(memory_namespace, *, bearer_token, limit=10):
+        return [{"content": "prefers async communication"}]
+
+    async def fake_facts(memory_namespace, *, bearer_token, limit=10):
+        return [{"content": "always asks for a TL;DR first"}]
+
+    captured = {}
+
+    async def fake_generate(**kwargs):
+        captured.update(kwargs)
+        return _llm_response()
+
+    monkeypatch.setattr(runtime_module, "get_agent_for_employee", fake_get_agent)
+    monkeypatch.setattr(runtime_module, "generate", fake_generate)
+    monkeypatch.setattr(memory_client_module, "get_preferences", fake_prefs)
+    monkeypatch.setattr(memory_client_module, "get_long_term_memory", fake_long_term)
+    monkeypatch.setattr(memory_client_module, "get_learned_facts", fake_facts)
+
+    resp = await client.post("/chat", json={"message": "hi"}, headers=headers)
+    assert resp.status_code == 200
+    assert "tone=casual" in captured["system"]
+    assert "prefers async communication" in captured["system"]
+    assert "always asks for a TL;DR first" in captured["system"]
+
+
+async def test_new_turn_is_stored_after_reply(client, monkeypatch, stub_memory_service):
+    headers, _, _ = auth_headers()
+    agent = _agent(memory_namespace="ns-store")
+
+    async def fake_get_agent(emp_id, *, bearer_token):
+        return agent
+
+    async def fake_generate(**kwargs):
+        return _llm_response(content="here's my answer")
+
+    monkeypatch.setattr(runtime_module, "get_agent_for_employee", fake_get_agent)
+    monkeypatch.setattr(runtime_module, "generate", fake_generate)
+
+    resp = await client.post("/chat", json={"message": "what's up?"}, headers=headers)
+    assert resp.status_code == 200
+
+    assert stub_memory_service == [
+        {"memory_namespace": "ns-store", "role": "user", "content": "what's up?"},
+        {"memory_namespace": "ns-store", "role": "assistant", "content": "here's my answer"},
+    ]
+
+
+async def test_memory_service_failure_returns_502(client, monkeypatch):
+    headers, _, _ = auth_headers()
+    agent = _agent()
+
+    from openclaw_runtime.memory_client import MemoryClientError
+
+    async def fake_get_agent(emp_id, *, bearer_token):
+        return agent
+
+    async def fake_history(memory_namespace, *, bearer_token, limit=20):
+        raise MemoryClientError(500, "memory service is down")
+
+    monkeypatch.setattr(runtime_module, "get_agent_for_employee", fake_get_agent)
+    monkeypatch.setattr(memory_client_module, "get_conversation_history", fake_history)
 
     resp = await client.post("/chat", json={"message": "hi"}, headers=headers)
     assert resp.status_code == 502
