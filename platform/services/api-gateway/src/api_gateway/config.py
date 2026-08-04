@@ -50,6 +50,9 @@ class Settings(BaseSettings):
     knowledge_service_url: str = Field(
         "http://localhost:8008", validation_alias="API_GATEWAY_KNOWLEDGE_SERVICE_URL"
     )
+    skill_marketplace_url: str = Field(
+        "http://localhost:8010", validation_alias="API_GATEWAY_SKILL_MARKETPLACE_URL"
+    )
 
 
 settings = Settings()

@@ -12,7 +12,7 @@ and integrations — is the actual product.
 
 ## Build phase (update this as phases complete)
 
-Current phase: **7 — Analytics Service (usage, tokens, cost, agent health)**
+Current phase: **8 — Skill Marketplace + first connectors (Slack, Google Calendar)**
 
 Do not implement components outside the current phase unless explicitly asked.
 Phases:

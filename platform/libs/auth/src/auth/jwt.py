@@ -37,6 +37,16 @@ def encode_system_token(tenant_id: uuid.UUID) -> str:
     )
 
 
+def encode_state_token(claims: dict, *, ttl_seconds: int = 600) -> str:
+    """Generic short-lived signed token for state that has to survive a
+    round trip through a third party — e.g. an OAuth `state` parameter,
+    which a redirect handler must be able to trust wasn't forged by
+    whoever lands on the callback URL. Not Principal-shaped like an
+    access/system token; just arbitrary claims signed with the same
+    shared secret, decoded with the plain `decode_token` above."""
+    return _encode({**claims, "purpose": "state"}, ttl_seconds=ttl_seconds)
+
+
 def _encode(claims: dict, *, ttl_seconds: int) -> str:
     now = datetime.now(UTC)
     payload = {

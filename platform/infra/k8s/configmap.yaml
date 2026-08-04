@@ -18,6 +18,7 @@ data:
   OPENCLAW_RUNTIME_MEMORY_SERVICE_URL: "http://memory-service:8007"
   OPENCLAW_RUNTIME_EMPLOYEE_SERVICE_URL: "http://employee-service:8002"
   OPENCLAW_RUNTIME_KNOWLEDGE_SERVICE_URL: "http://knowledge-service:8008"
+  OPENCLAW_RUNTIME_SKILL_MARKETPLACE_URL: "http://skill-marketplace:8010"
 
   API_GATEWAY_TENANT_SERVICE_URL: "http://tenant-service:8001"
   API_GATEWAY_EMPLOYEE_SERVICE_URL: "http://employee-service:8002"
@@ -27,3 +28,11 @@ data:
   API_GATEWAY_OPENCLAW_RUNTIME_URL: "http://openclaw-runtime:8006"
   API_GATEWAY_MEMORY_SERVICE_URL: "http://memory-service:8007"
   API_GATEWAY_KNOWLEDGE_SERVICE_URL: "http://knowledge-service:8008"
+  API_GATEWAY_SKILL_MARKETPLACE_URL: "http://skill-marketplace:8010"
+
+  # Must match the Slack app / Google Cloud OAuth client's registered
+  # redirect URI exactly. The in-cluster DNS name below only works for
+  # requests that never leave the cluster — a real deployment overrides
+  # this to the API Gateway's actual external domain (Slack/Google redirect
+  # the employee's browser here directly, not through internal DNS).
+  SKILL_MARKETPLACE_PUBLIC_BASE_URL: "http://skill-marketplace:8010"

@@ -6,11 +6,11 @@ events.consume(), which logs it and drops the message rather than
 retrying forever.
 """
 
-from events import ChatInteractionEvent, LLMUsageEvent
+from events import ChatInteractionEvent, LLMUsageEvent, SkillUsageEvent
 from tenancy import reset_current_tenant_id, set_current_tenant_id
 
 from .db import SessionFactory
-from .models import ChatInteractionEventRow, LLMUsageEventRow
+from .models import ChatInteractionEventRow, LLMUsageEventRow, SkillUsageEventRow
 
 
 async def handle_llm_usage_event(body: bytes) -> None:
@@ -47,6 +47,25 @@ async def handle_chat_interaction_event(body: bytes) -> None:
                     success=event.success,
                     error_stage=event.error_stage,
                     latency_ms=event.latency_ms,
+                    created_at=event.created_at,
+                )
+            )
+            await session.commit()
+    finally:
+        reset_current_tenant_id(token)
+
+
+async def handle_skill_usage_event(body: bytes) -> None:
+    event = SkillUsageEvent.model_validate_json(body)
+    token = set_current_tenant_id(event.tenant_id)
+    try:
+        async with SessionFactory() as session:
+            session.add(
+                SkillUsageEventRow(
+                    employee_id=event.employee_id,
+                    agent_id=event.agent_id,
+                    skill_name=event.skill_name,
+                    success=event.success,
                     created_at=event.created_at,
                 )
             )

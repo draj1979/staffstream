@@ -6,6 +6,9 @@ def test_resolve_upstream_matches_by_first_segment():
     assert resolve_upstream("employees/abc-123") == "http://localhost:8002"
     assert resolve_upstream("documents") == "http://localhost:8008"
     assert resolve_upstream("search") == "http://localhost:8008"
+    assert resolve_upstream("skills") == "http://localhost:8010"
+    assert resolve_upstream("connections/slack/authorize") == "http://localhost:8010"
+    assert resolve_upstream("tools") == "http://localhost:8010"
 
 
 def test_resolve_upstream_returns_none_for_unknown_path():

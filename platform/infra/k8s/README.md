@@ -45,20 +45,22 @@ real registry, and pins a real tag instead of `latest`.
 - `configmap.yaml` — non-secret config: inter-service URLs (k8s DNS names,
   e.g. `http://tenant-service:8001`), `REDIS_URL`, and `RABBITMQ_URL`.
 - `secret.example.yaml` — template for `JWT_SECRET_KEY`, `ANTHROPIC_API_KEY`,
-  `VOYAGE_API_KEY`, Postgres credentials, and every `*_DATABASE_URL` (these
+  `VOYAGE_API_KEY`, `OAUTH_ENCRYPTION_KEY` + Slack/Google OAuth app
+  credentials, Postgres credentials, and every `*_DATABASE_URL` (these
   live in the Secret, not the ConfigMap, because they embed the DB
-  password). Real deployments should source these from Vault / a cloud
-  secret manager instead, per CLAUDE.md's security baseline.
+  password or another secret value). Real deployments should source these
+  from Vault / a cloud secret manager instead, per CLAUDE.md's security
+  baseline.
 - `postgres.yaml` — backs every service except knowledge-service: a
   ConfigMap holding the same `init-db.sh` used by docker-compose (creates
-  the six non-vector per-service databases), a PVC, Deployment, Service.
+  the seven non-vector per-service databases), a PVC, Deployment, Service.
 - `postgres-vector.yaml` — separate `pgvector/pgvector:pg16` instance
   dedicated to knowledge-service, mirroring docker-compose's split (kept
   separate so the pgvector requirement never touches the other services'
   database or its image/collation).
 - `redis.yaml` — backs the API Gateway's per-tenant rate limiter.
 - `rabbitmq.yaml` — event bus: LLM Gateway and OpenClaw Runtime publish
-  usage/interaction events here, Analytics Service consumes them.
+  usage/interaction/skill events here, Analytics Service consumes them.
 - `services/*.yaml` — one Deployment + Service per backend service, each
   wired with `livenessProbe` on `/healthz` and `readinessProbe` on
   `/readyz` (see each service's own `/readyz` — DB-backed services check

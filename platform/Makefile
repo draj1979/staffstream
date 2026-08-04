@@ -1,10 +1,11 @@
 .PHONY: up down logs lint test migrate \
 	run-tenant-service run-employee-service run-auth-service run-agent-registry run-llm-gateway \
 	run-openclaw-runtime run-memory-service run-knowledge-service run-api-gateway run-analytics-service \
+	run-skill-marketplace \
 	docker-build docker-build-tenant-service docker-build-employee-service docker-build-auth-service \
 	docker-build-agent-registry docker-build-llm-gateway docker-build-openclaw-runtime \
 	docker-build-memory-service docker-build-knowledge-service docker-build-api-gateway \
-	docker-build-analytics-service
+	docker-build-analytics-service docker-build-skill-marketplace
 
 up:
 	docker compose up -d
@@ -29,6 +30,7 @@ migrate:
 	cd services/memory-service && uv run alembic upgrade head
 	cd services/knowledge-service && uv run alembic upgrade head
 	cd services/analytics-service && uv run alembic upgrade head
+	cd services/skill-marketplace && uv run alembic upgrade head
 
 run-tenant-service:
 	uv run uvicorn tenant_service.main:app --reload --port 8001 --app-dir services/tenant-service/src
@@ -60,12 +62,15 @@ run-api-gateway:
 run-analytics-service:
 	uv run uvicorn analytics_service.main:app --reload --port 8009 --app-dir services/analytics-service/src
 
+run-skill-marketplace:
+	uv run uvicorn skill_marketplace.main:app --reload --port 8010 --app-dir services/skill-marketplace/src
+
 # Each image is built from the repo root (uv workspace — every service
 # depends on sibling libs/ packages), one Dockerfile per service.
 docker-build: docker-build-tenant-service docker-build-employee-service docker-build-auth-service \
 	docker-build-agent-registry docker-build-llm-gateway docker-build-openclaw-runtime \
 	docker-build-memory-service docker-build-knowledge-service docker-build-api-gateway \
-	docker-build-analytics-service
+	docker-build-analytics-service docker-build-skill-marketplace
 
 docker-build-tenant-service:
 	docker build -f services/tenant-service/Dockerfile -t staffstream/tenant-service:latest .
@@ -96,3 +101,6 @@ docker-build-api-gateway:
 
 docker-build-analytics-service:
 	docker build -f services/analytics-service/Dockerfile -t staffstream/analytics-service:latest .
+
+docker-build-skill-marketplace:
+	docker build -f services/skill-marketplace/Dockerfile -t staffstream/skill-marketplace:latest .

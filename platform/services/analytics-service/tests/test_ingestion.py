@@ -1,10 +1,10 @@
 import uuid
 from datetime import UTC, datetime
 
-from analytics_service.models import ChatInteractionEventRow, LLMUsageEventRow
+from analytics_service.models import ChatInteractionEventRow, LLMUsageEventRow, SkillUsageEventRow
 from sqlalchemy import select
 
-from events import ChatInteractionEvent, LLMUsageEvent
+from events import ChatInteractionEvent, LLMUsageEvent, SkillUsageEvent
 from tenancy import reset_current_tenant_id, set_current_tenant_id
 
 
@@ -91,6 +91,32 @@ async def test_handle_chat_interaction_event_writes_row(session_factory):
     assert rows[0].success is False
     assert rows[0].error_stage == "llm"
     assert rows[0].latency_ms == 842
+
+
+async def test_handle_skill_usage_event_writes_row(session_factory):
+    from analytics_service.ingestion import handle_skill_usage_event
+
+    tenant_id = uuid.uuid4()
+    event = SkillUsageEvent(
+        tenant_id=tenant_id,
+        employee_id=uuid.uuid4(),
+        agent_id=uuid.uuid4(),
+        skill_name="slack",
+        success=True,
+    )
+
+    await handle_skill_usage_event(event.model_dump_json().encode())
+
+    token = set_current_tenant_id(tenant_id)
+    try:
+        async with session_factory() as session:
+            rows = (await session.execute(select(SkillUsageEventRow))).scalars().all()
+    finally:
+        reset_current_tenant_id(token)
+
+    assert len(rows) == 1
+    assert rows[0].skill_name == "slack"
+    assert rows[0].success is True
 
 
 async def test_handle_llm_usage_event_bad_payload_raises(session_factory):

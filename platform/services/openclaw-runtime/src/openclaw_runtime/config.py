@@ -12,6 +12,7 @@ class Settings(BaseSettings):
     memory_service_url: str = "http://localhost:8007"
     employee_service_url: str = "http://localhost:8002"
     knowledge_service_url: str = "http://localhost:8008"
+    skill_marketplace_url: str = "http://localhost:8010"
 
     # Shared infra, deliberately unprefixed (alias bypasses env_prefix) —
     # same broker every service that publishes/consumes analytics events

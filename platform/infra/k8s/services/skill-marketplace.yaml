@@ -1,0 +1,50 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: skill-marketplace
+  namespace: staffstream
+  labels:
+    app: skill-marketplace
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: skill-marketplace
+  template:
+    metadata:
+      labels:
+        app: skill-marketplace
+    spec:
+      containers:
+        - name: skill-marketplace
+          image: staffstream/skill-marketplace:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8010
+          envFrom:
+            - configMapRef: {name: staffstream-config}
+            - secretRef: {name: staffstream-secrets}
+          livenessProbe:
+            httpGet: {path: /healthz, port: 8010}
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          readinessProbe:
+            httpGet: {path: /readyz, port: 8010}
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            failureThreshold: 3
+          resources:
+            requests: {cpu: "50m", memory: "128Mi"}
+            limits: {cpu: "500m", memory: "256Mi"}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: skill-marketplace
+  namespace: staffstream
+spec:
+  selector:
+    app: skill-marketplace
+  ports:
+    - port: 8010
+      targetPort: 8010

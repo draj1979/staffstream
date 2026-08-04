@@ -9,13 +9,19 @@ from collections.abc import Awaitable, Callable
 from events import (
     QUEUE_CHAT_INTERACTION,
     QUEUE_LLM_USAGE,
+    QUEUE_SKILL_USAGE,
     ROUTING_KEY_CHAT_INTERACTION,
     ROUTING_KEY_LLM_USAGE,
+    ROUTING_KEY_SKILL_USAGE,
     consume,
 )
 
 from .config import settings
-from .ingestion import handle_chat_interaction_event, handle_llm_usage_event
+from .ingestion import (
+    handle_chat_interaction_event,
+    handle_llm_usage_event,
+    handle_skill_usage_event,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -60,6 +66,17 @@ def start_consumers() -> list[asyncio.Task]:
                     queue_name=QUEUE_CHAT_INTERACTION,
                     routing_key=ROUTING_KEY_CHAT_INTERACTION,
                     handler=handle_chat_interaction_event,
+                ),
+            )
+        ),
+        asyncio.create_task(
+            _run_forever(
+                "skill_usage",
+                lambda: consume(
+                    settings.rabbitmq_url,
+                    queue_name=QUEUE_SKILL_USAGE,
+                    routing_key=ROUTING_KEY_SKILL_USAGE,
+                    handler=handle_skill_usage_event,
                 ),
             )
         ),

@@ -1,6 +1,6 @@
 from .dependency import require_auth
 from .errors import InvalidTokenError
-from .jwt import decode_token, encode_access_token, encode_system_token
+from .jwt import decode_token, encode_access_token, encode_state_token, encode_system_token
 from .passwords import hash_password, verify_password
 from .principal import Principal
 
@@ -9,6 +9,7 @@ __all__ = [
     "InvalidTokenError",
     "decode_token",
     "encode_access_token",
+    "encode_state_token",
     "encode_system_token",
     "hash_password",
     "verify_password",

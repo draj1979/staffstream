@@ -15,6 +15,9 @@ ROUTES: dict[str, str] = {
     "memory": settings.memory_service_url,
     "documents": settings.knowledge_service_url,
     "search": settings.knowledge_service_url,
+    "skills": settings.skill_marketplace_url,
+    "connections": settings.skill_marketplace_url,
+    "tools": settings.skill_marketplace_url,
 }
 
 # The knowledge service's upload endpoint is the one route that needs a

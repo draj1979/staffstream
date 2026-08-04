@@ -5,7 +5,13 @@ import jwt as pyjwt
 import pytest
 from auth.config import JWT_ALGORITHM, JWT_SECRET_KEY
 
-from auth import InvalidTokenError, decode_token, encode_access_token, encode_system_token
+from auth import (
+    InvalidTokenError,
+    decode_token,
+    encode_access_token,
+    encode_state_token,
+    encode_system_token,
+)
 
 
 def test_access_token_round_trips_tenant_and_employee():
@@ -47,6 +53,22 @@ def test_decode_rejects_expired_token():
     expired = pyjwt.encode(payload, JWT_SECRET_KEY, algorithm=JWT_ALGORITHM)
     with pytest.raises(InvalidTokenError):
         decode_token(expired)
+
+
+def test_state_token_round_trips_arbitrary_claims():
+    token = encode_state_token({"tenant_id": "t1", "employee_id": "e1", "skill_id": "slack"})
+
+    claims = decode_token(token)
+    assert claims["tenant_id"] == "t1"
+    assert claims["employee_id"] == "e1"
+    assert claims["skill_id"] == "slack"
+    assert claims["purpose"] == "state"
+
+
+def test_state_token_expires_per_its_own_ttl():
+    token = encode_state_token({"x": "y"}, ttl_seconds=-1)  # already expired
+    with pytest.raises(InvalidTokenError):
+        decode_token(token)
 
 
 def test_decode_rejects_token_signed_with_wrong_secret():

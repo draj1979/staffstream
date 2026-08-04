@@ -20,6 +20,7 @@ async def generate(
     messages: list[dict],
     temperature: float,
     agent_id: uuid.UUID | None = None,
+    tools: list[dict] | None = None,
 ) -> dict:
     async with httpx.AsyncClient(base_url=settings.llm_gateway_url, timeout=60.0) as client:
         resp = await client.post(
@@ -30,6 +31,7 @@ async def generate(
                 "messages": messages,
                 "temperature": temperature,
                 "agent_id": str(agent_id) if agent_id else None,
+                "tools": tools,
             },
             headers={"Authorization": bearer_token},
         )

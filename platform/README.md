@@ -10,9 +10,9 @@ conventions.
 
 ## Current phase
 
-**Phase 7 — Analytics Service: usage, tokens, cost, conversation count,
-agent health, and productivity metrics, exposed via Admin/Finance/IT
-dashboards.**
+**Phase 8 — Skill Marketplace: a per-tenant skill registry, per-employee
+OAuth connectors, and the first two skills (Slack, Google Calendar) wired
+into OpenClaw's tool-calling loop.**
 
 ## Stack
 
@@ -20,10 +20,11 @@ dashboards.**
 - DB: PostgreSQL (one logical database per service) — Cache: Redis
 - Migrations: Alembic — CI: GitHub Actions
 - Auth: argon2 password hashing, HS256 JWT access tokens, opaque hashed refresh tokens
-- LLM: Anthropic Claude via the official SDK, behind a provider-abstraction interface
+- LLM: Anthropic Claude via the official SDK, behind a provider-abstraction interface, with tool-calling
 - Embeddings: Voyage AI (`voyage-3-lite`, 512-dim) — Vector DB: pgvector
 - Containers: one Dockerfile per service — Orchestration: Kubernetes (single namespace)
-- Events: RabbitMQ (topic exchange) — LLM usage / chat interaction events, consumed by Analytics Service
+- Events: RabbitMQ (topic exchange) — LLM usage / chat interaction / skill usage events, consumed by Analytics Service
+- Connectors: Slack (OAuth v2 user token), Google Calendar (OAuth2 + refresh) — tokens encrypted at rest (Fernet)
 
 ## Tenant isolation
 
@@ -103,6 +104,15 @@ registered (via the official Anthropic SDK) — Phase 10 registers GPT,
 Gemini, etc. as more `Provider` implementations, with no changes needed to
 the gateway or its callers.
 
+Phase 8 adds tool-calling to the request/response contract: `LLMRequest`
+takes an optional `tools` list (Anthropic's name/description/input_schema
+shape), and `LLMResponse.tool_calls` carries back any `tool_use` blocks the
+model produced (`stop_reason: "tool_use"`), alongside the usual text
+`content` — see [models.py](services/llm-gateway/src/llm_gateway/models.py).
+The gateway itself doesn't execute tools; it just passes the tool
+definitions through to Anthropic and structures the response. OpenClaw
+Runtime is what actually runs a tool and feeds the result back.
+
 ## OpenClaw Runtime
 
 `services/openclaw-runtime` implements the request flow from CLAUDE.md:
@@ -119,12 +129,22 @@ takes effect on the very next message with no restart or cache
 invalidation anywhere (see
 [runtime.py](services/openclaw-runtime/src/openclaw_runtime/runtime.py) and
 its no-caching test). It forwards the caller's own bearer token to Agent
-Registry, Memory Service, and LLM Gateway rather than minting a new one —
-the caller already has a valid session, so there's no separate identity to
-establish.
-[knowledge.py](services/openclaw-runtime/src/openclaw_runtime/knowledge.py)
-is still a no-op stub with the real service's eventual signature — Phase 5
-replaces its body, not its callers.
+Registry, Memory Service, LLM Gateway, and Skill Marketplace rather than
+minting a new one — the caller already has a valid session, so there's no
+separate identity to establish.
+
+Phase 8 adds the "Load Skills -> LLM -> Tool Calls" part of CLAUDE.md's
+request flow ([skills.py](services/openclaw-runtime/src/openclaw_runtime/skills.py),
+the tool loop in `runtime.py`): before calling the LLM, it fetches the
+tools Skill Marketplace has available for this employee (already filtered
+to tenant-enabled + employee-connected) and narrows that further to the
+agent's own `skills` allowlist from Agent Registry — three independent
+gates that all have to agree before a tool ever reaches the LLM. If the
+model responds with a `tool_use` block, the runtime invokes the matching
+skill via Skill Marketplace, feeds the result back as a `tool_result`, and
+loops (bounded by `MAX_TOOL_ITERATIONS = 5`) until the model returns a
+plain text reply. Every tool call — success or failure — publishes a
+`SkillUsageEvent` the same fire-and-forget way as chat interaction events.
 
 ## Memory Service
 
@@ -259,16 +279,67 @@ behind `require_auth()` and tenant-scoped through the same tenancy layer
 as everything else, with `from_date`/`to_date` query params defaulting to
 a trailing 30-day window. Role-gating which dashboard an employee can see
 is RBAC, deferred to Phase 9 like everywhere else in the platform.
-`SkillUsageEventRow`/`SkillUsageEvent` exist end-to-end in the schema
-already, ready for Phase 8's Skill Marketplace to start publishing into —
-no producer emits them yet.
+`SkillUsageEventRow`/`SkillUsageEvent`'s producer landed in Phase 8 —
+OpenClaw Runtime publishes one per tool call, ingested by the same
+consumer pattern as the other two event types (see
+[consumer.py](services/analytics-service/src/analytics_service/consumer.py)).
+The three dashboard endpoints don't surface skill usage yet — the data
+lands in Postgres and is queryable, but `crud.py`'s aggregations weren't
+extended for it this phase.
+
+## Skill Marketplace
+
+`services/skill-marketplace` is a registry of skills (`Skill`, a shared
+catalog — not tenant-scoped, seeded by its migration) plus two
+tenant/employee-scoped tables: `TenantSkillEnablement` (opt-in per tenant,
+`enabled` + `config`, never on by default) and `EmployeeConnection` (one
+employee's own OAuth grant for one skill — access/refresh tokens Fernet-
+encrypted at rest, keyed by `(tenant_id, employee_id, skill_id)`, never
+shared with anyone else in the tenant).
+
+Each skill is a [`Connector`](services/skill-marketplace/src/skill_marketplace/connectors/base.py)
+implementation registered in `CONNECTOR_REGISTRY` by skill_id — nothing
+elsewhere in the service imports a connector class directly, matching the
+platform convention of not special-casing new skills into core logic:
+
+- **Slack** ([slack.py](services/skill-marketplace/src/skill_marketplace/connectors/slack.py)) —
+  OAuth v2 with `user_scope` (not `scope`): every token minted is a *user*
+  token, so every API call this connector makes runs as the employee
+  themselves, against whatever channels their own Slack account can see.
+  Tools: `slack_list_channels`, `slack_read_channel_messages`,
+  `slack_post_message`.
+- **Google Calendar** ([google_calendar.py](services/skill-marketplace/src/skill_marketplace/connectors/google_calendar.py)) —
+  OAuth2 with `access_type=offline` + `prompt=consent` for a refresh
+  token; every call reads/writes the `primary` calendar of whichever
+  account the token belongs to. Tools: `calendar_list_events`,
+  `calendar_create_event`. Access tokens are refreshed automatically
+  ahead of expiry (`crud.token_needs_refresh`) before a call is made.
+
+Three gates all have to hold before a tool call actually reaches Slack or
+Google, checked cheapest-first in
+[routers/invoke.py](services/skill-marketplace/src/skill_marketplace/routers/invoke.py):
+the skill has to exist, the tenant has to have it enabled, and *this*
+employee has to have their own connection for it. Even then, the final
+authorization boundary is the provider itself — nothing this service does
+can make a call succeed that the employee's own OAuth grant doesn't
+already permit at Slack/Google's end; there's no shared or elevated
+credential anywhere in the path.
+
+The OAuth flow itself (`GET /connections/{skill_id}/authorize` — a 307 to
+the provider — and `GET /connections/{skill_id}/callback`) doesn't go
+through `require_auth`, since the provider's redirect back carries no
+bearer token. Instead, `/authorize` mints a short-lived signed `state`
+token (`auth.encode_state_token`, added this phase alongside the existing
+access/system tokens) carrying `tenant_id`/`employee_id`/`skill_id`, and
+`/callback` trusts only what it can verify out of that token — never
+anything from the request's own query string.
 
 ## Containers & Kubernetes
 
 Every service has its own `Dockerfile` (multi-stage, `uv`-based, built
 from the repo root since this is a uv workspace — see any service's
-Dockerfile for the exact command). `make docker-build` builds all ten.
-`infra/k8s/` has Deployment + Service manifests for all ten plus the
+Dockerfile for the exact command). `make docker-build` builds all eleven.
+`infra/k8s/` has Deployment + Service manifests for all eleven plus the
 namespace, ConfigMap, Secret template, and in-cluster Postgres/Redis/RabbitMQ —
 see [infra/k8s/README.md](infra/k8s/README.md) for the full deploy flow.
 Every Deployment's `livenessProbe` hits `/healthz` (process alive — never
@@ -299,9 +370,10 @@ make run-memory-service     # http://localhost:8007
 make run-knowledge-service  # http://localhost:8008
 make run-api-gateway        # http://localhost:8000
 make run-analytics-service  # http://localhost:8009
+make run-skill-marketplace  # http://localhost:8010
 make down     # stop containers
 
-make docker-build   # build all 10 service images (staffstream/<service>:latest)
+make docker-build   # build all 11 service images (staffstream/<service>:latest)
 ```
 
 To try the whole platform containerized rather than via `make run-*`, see
@@ -317,14 +389,20 @@ service). `JWT_SECRET_KEY` must be identical across every service — see
 `.env.example`. `ANTHROPIC_API_KEY` / `VOYAGE_API_KEY` are only needed to
 actually call Claude / Voyage; without them the services still start and
 route correctly, calls just fail with a normal auth error from the
-provider.
+provider. Same story for `SLACK_CLIENT_ID`/`SLACK_CLIENT_SECRET` and
+`GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET` — Skill Marketplace starts fine
+without a real Slack app or Google Cloud OAuth client registered, an
+OAuth authorize/exchange just fails with a normal error from the
+provider until they're set. `OAUTH_ENCRYPTION_KEY` has a working local-dev
+default but should be regenerated per real environment (see
+`.env.example`'s comment for the one-liner).
 
 ## Layout
 
 ```
 libs/
   tenancy/            shared tenant-isolation ORM base + session middleware
-  auth/                shared JWT issuance/verification + password hashing
+  auth/                shared JWT issuance/verification + password hashing + signed OAuth state tokens
   events/              shared event schemas + RabbitMQ pub/sub (publisher, consumer)
 services/
   tenant-service/      Tenant CRUD: plan, storage quota, LLM config, branding, subscription
@@ -332,11 +410,12 @@ services/
   auth-service/        Signup, login, refresh, logout — the only service touching credentials
   agent-registry/      One agent profile per employee: model, prompt, temperature, memory namespace, ...
   llm-gateway/          Provider abstraction over LLMs; Claude only for now — emits LLM usage events
-  openclaw-runtime/     Stateless: POST /chat — loads agent + memory + knowledge, calls LLM Gateway, stores the turn, emits chat interaction events
+  openclaw-runtime/     Stateless: POST /chat — loads agent + memory + knowledge + skills, tool-calling loop, emits chat/skill events
   memory-service/       Per-employee memory: conversation, long-term, preferences, learned facts
   knowledge-service/    Company/department/personal knowledge: PDF/DOCX -> chunks -> pgvector
   api-gateway/          Front door: per-tenant rate limiting, size limits, sanitized errors, reverse proxy
   analytics-service/    Usage/tokens/cost/health from queued events — Admin/Finance/IT dashboards
+  skill-marketplace/    Skill registry, per-tenant enablement, per-employee OAuth (Slack, Google Calendar)
 tests/                 root-level smoke tests
 docs/                  architecture and design docs
 infra/
