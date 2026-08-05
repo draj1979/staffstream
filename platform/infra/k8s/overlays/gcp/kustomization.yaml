@@ -18,95 +18,95 @@
 # below have already been replaced with real values. See
 # set-gcp-project.sh and this directory's README.md.
 resources:
-  - ../../base
-  - service-accounts.yaml
-  - secret-provider-classes.yaml
+- ../../base
+- service-accounts.yaml
+- secret-provider-classes.yaml
 
-patches:
   # REDIS_URL moves from the plain ConfigMap to api-gateway's own
   # SecretProviderClass-synced secret — Memorystore has AUTH enabled
   # (redis.tf), unlike the in-cluster Redis this ConfigMap value was
   # written for, so it can no longer live in plaintext config.
-  - target:
-      kind: ConfigMap
-      name: staffstream-config
-    patch: |-
-      - op: remove
-        path: /data/REDIS_URL
 
   # Drop the in-cluster Postgres (both instances) and Redis entirely —
   # Cloud SQL and Memorystore replace them. `$patch: delete` removes a
   # whole resource pulled in from the base, rather than trying to
   # "un-include" individual files from a kustomization directory (not
   # something Kustomize supports once a base is referenced as a whole).
-  - patch: |-
-      apiVersion: v1
-      kind: ConfigMap
-      metadata:
-        name: postgres-initdb
-        namespace: staffstream
-      $patch: delete
-  - patch: |-
-      apiVersion: v1
-      kind: PersistentVolumeClaim
-      metadata:
-        name: postgres-data
-        namespace: staffstream
-      $patch: delete
-  - patch: |-
-      apiVersion: apps/v1
-      kind: Deployment
-      metadata:
-        name: postgres
-        namespace: staffstream
-      $patch: delete
-  - patch: |-
-      apiVersion: v1
-      kind: Service
-      metadata:
-        name: postgres
-        namespace: staffstream
-      $patch: delete
-  - patch: |-
-      apiVersion: v1
-      kind: PersistentVolumeClaim
-      metadata:
-        name: postgres-vector-data
-        namespace: staffstream
-      $patch: delete
-  - patch: |-
-      apiVersion: apps/v1
-      kind: Deployment
-      metadata:
-        name: postgres-vector
-        namespace: staffstream
-      $patch: delete
-  - patch: |-
-      apiVersion: v1
-      kind: Service
-      metadata:
-        name: postgres-vector
-        namespace: staffstream
-      $patch: delete
-  - patch: |-
-      apiVersion: apps/v1
-      kind: Deployment
-      metadata:
-        name: redis
-        namespace: staffstream
-      $patch: delete
-  - patch: |-
-      apiVersion: v1
-      kind: Service
-      metadata:
-        name: redis
-        namespace: staffstream
-      $patch: delete
 
   # The 12 per-Deployment patches described at the top of this file — one
   # file, no explicit `target:` needed since each document inside already
   # carries its own kind/name for Kustomize to match against.
-  - path: deployment-patches.yaml
+patches:
+- patch: |-
+    - op: remove
+      path: /data/REDIS_URL
+  target:
+    kind: ConfigMap
+    name: staffstream-config
+- patch: |-
+    apiVersion: v1
+    kind: ConfigMap
+    metadata:
+      name: postgres-initdb
+      namespace: staffstream
+    $patch: delete
+- patch: |-
+    apiVersion: v1
+    kind: PersistentVolumeClaim
+    metadata:
+      name: postgres-data
+      namespace: staffstream
+    $patch: delete
+- patch: |-
+    apiVersion: apps/v1
+    kind: Deployment
+    metadata:
+      name: postgres
+      namespace: staffstream
+    $patch: delete
+- patch: |-
+    apiVersion: v1
+    kind: Service
+    metadata:
+      name: postgres
+      namespace: staffstream
+    $patch: delete
+- patch: |-
+    apiVersion: v1
+    kind: PersistentVolumeClaim
+    metadata:
+      name: postgres-vector-data
+      namespace: staffstream
+    $patch: delete
+- patch: |-
+    apiVersion: apps/v1
+    kind: Deployment
+    metadata:
+      name: postgres-vector
+      namespace: staffstream
+    $patch: delete
+- patch: |-
+    apiVersion: v1
+    kind: Service
+    metadata:
+      name: postgres-vector
+      namespace: staffstream
+    $patch: delete
+- patch: |-
+    apiVersion: apps/v1
+    kind: Deployment
+    metadata:
+      name: redis
+      namespace: staffstream
+    $patch: delete
+- patch: |-
+    apiVersion: v1
+    kind: Service
+    metadata:
+      name: redis
+      namespace: staffstream
+    $patch: delete
+- path: deployment-patches.yaml
 
 # Rewrites each service's image from the base's local
 # `staffstream/<service>:latest` to its real Artifact Registry path —
@@ -117,39 +117,41 @@ patches:
 # up. Nothing else in this overlay changes per-deploy — this is
 # deliberately the one file/field CI touches.
 images:
-  - name: staffstream/tenant-service
-    newName: asia-south1-docker.pkg.dev/rational-medley-466807-b3/staffstream/tenant-service
-    newTag: latest
-  - name: staffstream/employee-service
-    newName: asia-south1-docker.pkg.dev/rational-medley-466807-b3/staffstream/employee-service
-    newTag: latest
-  - name: staffstream/auth-service
-    newName: asia-south1-docker.pkg.dev/rational-medley-466807-b3/staffstream/auth-service
-    newTag: latest
-  - name: staffstream/agent-registry
-    newName: asia-south1-docker.pkg.dev/rational-medley-466807-b3/staffstream/agent-registry
-    newTag: latest
-  - name: staffstream/llm-gateway
-    newName: asia-south1-docker.pkg.dev/rational-medley-466807-b3/staffstream/llm-gateway
-    newTag: latest
-  - name: staffstream/openclaw-runtime
-    newName: asia-south1-docker.pkg.dev/rational-medley-466807-b3/staffstream/openclaw-runtime
-    newTag: latest
-  - name: staffstream/memory-service
-    newName: asia-south1-docker.pkg.dev/rational-medley-466807-b3/staffstream/memory-service
-    newTag: latest
-  - name: staffstream/knowledge-service
-    newName: asia-south1-docker.pkg.dev/rational-medley-466807-b3/staffstream/knowledge-service
-    newTag: latest
-  - name: staffstream/api-gateway
-    newName: asia-south1-docker.pkg.dev/rational-medley-466807-b3/staffstream/api-gateway
-    newTag: latest
-  - name: staffstream/analytics-service
-    newName: asia-south1-docker.pkg.dev/rational-medley-466807-b3/staffstream/analytics-service
-    newTag: latest
-  - name: staffstream/skill-marketplace
-    newName: asia-south1-docker.pkg.dev/rational-medley-466807-b3/staffstream/skill-marketplace
-    newTag: latest
-  - name: staffstream/audit-service
-    newName: asia-south1-docker.pkg.dev/rational-medley-466807-b3/staffstream/audit-service
-    newTag: latest
+- name: staffstream/agent-registry
+  newName: asia-south1-docker.pkg.dev/rational-medley-466807-b3/staffstream/agent-registry
+  newTag: d35483b957165d0179896035a70c73b7e1451a1b
+- name: staffstream/analytics-service
+  newName: asia-south1-docker.pkg.dev/rational-medley-466807-b3/staffstream/analytics-service
+  newTag: d35483b957165d0179896035a70c73b7e1451a1b
+- name: staffstream/api-gateway
+  newName: asia-south1-docker.pkg.dev/rational-medley-466807-b3/staffstream/api-gateway
+  newTag: d35483b957165d0179896035a70c73b7e1451a1b
+- name: staffstream/audit-service
+  newName: asia-south1-docker.pkg.dev/rational-medley-466807-b3/staffstream/audit-service
+  newTag: d35483b957165d0179896035a70c73b7e1451a1b
+- name: staffstream/auth-service
+  newName: asia-south1-docker.pkg.dev/rational-medley-466807-b3/staffstream/auth-service
+  newTag: d35483b957165d0179896035a70c73b7e1451a1b
+- name: staffstream/employee-service
+  newName: asia-south1-docker.pkg.dev/rational-medley-466807-b3/staffstream/employee-service
+  newTag: d35483b957165d0179896035a70c73b7e1451a1b
+- name: staffstream/knowledge-service
+  newName: asia-south1-docker.pkg.dev/rational-medley-466807-b3/staffstream/knowledge-service
+  newTag: d35483b957165d0179896035a70c73b7e1451a1b
+- name: staffstream/llm-gateway
+  newName: asia-south1-docker.pkg.dev/rational-medley-466807-b3/staffstream/llm-gateway
+  newTag: d35483b957165d0179896035a70c73b7e1451a1b
+- name: staffstream/memory-service
+  newName: asia-south1-docker.pkg.dev/rational-medley-466807-b3/staffstream/memory-service
+  newTag: d35483b957165d0179896035a70c73b7e1451a1b
+- name: staffstream/openclaw-runtime
+  newName: asia-south1-docker.pkg.dev/rational-medley-466807-b3/staffstream/openclaw-runtime
+  newTag: d35483b957165d0179896035a70c73b7e1451a1b
+- name: staffstream/skill-marketplace
+  newName: asia-south1-docker.pkg.dev/rational-medley-466807-b3/staffstream/skill-marketplace
+  newTag: d35483b957165d0179896035a70c73b7e1451a1b
+- name: staffstream/tenant-service
+  newName: asia-south1-docker.pkg.dev/rational-medley-466807-b3/staffstream/tenant-service
+  newTag: d35483b957165d0179896035a70c73b7e1451a1b
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
