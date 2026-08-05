@@ -10,13 +10,10 @@ terraform {
   }
 
   # GCS backend — bucket must already exist (Terraform can't create the
-  # bucket it stores its own state in). Uncomment and fill in once, or
-  # pass equivalent -backend-config= flags at `terraform init` time (the
-  # GitHub Actions workflow does the latter, keeping the project/bucket
-  # name out of committed source — see ../../.github/workflows/deploy-gcp.yml).
-  #
-  # backend "gcs" {
-  #   bucket = "REPLACE_ME-staffstream-tfstate"
-  #   prefix = "gcp/prod"
-  # }
+  # bucket it stores its own state in). bucket/prefix are supplied via
+  # `-backend-config=` at `terraform init` time (kept out of this
+  # committed file so it stays project-agnostic — see
+  # ../../.github/workflows/deploy-gcp.yml for the CI equivalent of the
+  # init command run for this deployment).
+  backend "gcs" {}
 }

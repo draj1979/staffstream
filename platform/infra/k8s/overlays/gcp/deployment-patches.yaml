@@ -19,7 +19,7 @@
 # needs the fields actually changing; kustomize composes this on top of
 # ../../services/<name>.yaml's base Deployment untouched.
 #
-# __GCP_PROJECT_ID__ / __GCP_REGION__ / __GCP_ENVIRONMENT__ get replaced
+# rational-medley-466807-b3 / asia-south1 / prod get replaced
 # once by set-gcp-project.sh — see this directory's README.md.
 apiVersion: apps/v1
 kind: Deployment
@@ -50,8 +50,9 @@ spec:
           image: gcr.io/cloud-sql-connectors/cloud-sql-proxy:2.14.0
           args:
             - "--structured-logs"
+            - "--private-ip"
             - "--port=5432"
-            - "__GCP_PROJECT_ID__:__GCP_REGION__:staffstream-main-__GCP_ENVIRONMENT__"
+            - "rational-medley-466807-b3:asia-south1:staffstream-main-prod"
           securityContext:
             runAsNonRoot: true
           resources:
@@ -87,8 +88,9 @@ spec:
           image: gcr.io/cloud-sql-connectors/cloud-sql-proxy:2.14.0
           args:
             - "--structured-logs"
+            - "--private-ip"
             - "--port=5432"
-            - "__GCP_PROJECT_ID__:__GCP_REGION__:staffstream-main-__GCP_ENVIRONMENT__"
+            - "rational-medley-466807-b3:asia-south1:staffstream-main-prod"
           securityContext:
             runAsNonRoot: true
           resources:
@@ -124,8 +126,9 @@ spec:
           image: gcr.io/cloud-sql-connectors/cloud-sql-proxy:2.14.0
           args:
             - "--structured-logs"
+            - "--private-ip"
             - "--port=5432"
-            - "__GCP_PROJECT_ID__:__GCP_REGION__:staffstream-main-__GCP_ENVIRONMENT__"
+            - "rational-medley-466807-b3:asia-south1:staffstream-main-prod"
           securityContext:
             runAsNonRoot: true
           resources:
@@ -161,8 +164,9 @@ spec:
           image: gcr.io/cloud-sql-connectors/cloud-sql-proxy:2.14.0
           args:
             - "--structured-logs"
+            - "--private-ip"
             - "--port=5432"
-            - "__GCP_PROJECT_ID__:__GCP_REGION__:staffstream-main-__GCP_ENVIRONMENT__"
+            - "rational-medley-466807-b3:asia-south1:staffstream-main-prod"
           securityContext:
             runAsNonRoot: true
           resources:
@@ -250,8 +254,9 @@ spec:
           image: gcr.io/cloud-sql-connectors/cloud-sql-proxy:2.14.0
           args:
             - "--structured-logs"
+            - "--private-ip"
             - "--port=5432"
-            - "__GCP_PROJECT_ID__:__GCP_REGION__:staffstream-main-__GCP_ENVIRONMENT__"
+            - "rational-medley-466807-b3:asia-south1:staffstream-main-prod"
           securityContext:
             runAsNonRoot: true
           resources:
@@ -287,8 +292,9 @@ spec:
           image: gcr.io/cloud-sql-connectors/cloud-sql-proxy:2.14.0
           args:
             - "--structured-logs"
+            - "--private-ip"
             - "--port=5432"
-            - "__GCP_PROJECT_ID__:__GCP_REGION__:staffstream-vector-__GCP_ENVIRONMENT__"
+            - "rational-medley-466807-b3:asia-south1:staffstream-vector-prod"
           securityContext:
             runAsNonRoot: true
           resources:
@@ -350,8 +356,9 @@ spec:
           image: gcr.io/cloud-sql-connectors/cloud-sql-proxy:2.14.0
           args:
             - "--structured-logs"
+            - "--private-ip"
             - "--port=5432"
-            - "__GCP_PROJECT_ID__:__GCP_REGION__:staffstream-main-__GCP_ENVIRONMENT__"
+            - "rational-medley-466807-b3:asia-south1:staffstream-main-prod"
           securityContext:
             runAsNonRoot: true
           resources:
@@ -387,8 +394,9 @@ spec:
           image: gcr.io/cloud-sql-connectors/cloud-sql-proxy:2.14.0
           args:
             - "--structured-logs"
+            - "--private-ip"
             - "--port=5432"
-            - "__GCP_PROJECT_ID__:__GCP_REGION__:staffstream-main-__GCP_ENVIRONMENT__"
+            - "rational-medley-466807-b3:asia-south1:staffstream-main-prod"
           securityContext:
             runAsNonRoot: true
           resources:
@@ -424,8 +432,9 @@ spec:
           image: gcr.io/cloud-sql-connectors/cloud-sql-proxy:2.14.0
           args:
             - "--structured-logs"
+            - "--private-ip"
             - "--port=5432"
-            - "__GCP_PROJECT_ID__:__GCP_REGION__:staffstream-main-__GCP_ENVIRONMENT__"
+            - "rational-medley-466807-b3:asia-south1:staffstream-main-prod"
           securityContext:
             runAsNonRoot: true
           resources:

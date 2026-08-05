@@ -36,7 +36,17 @@ if [[ -z "${DB_PASSWORD}" ]]; then
 fi
 
 echo "Starting Cloud SQL Auth Proxy for ${INSTANCE_CONNECTION_NAME} on 127.0.0.1:5433..."
-cloud-sql-proxy --port 5433 "${INSTANCE_CONNECTION_NAME}" &
+# --private-ip: this instance has no public IP (ipv4_enabled = false in
+# cloudsql.tf) — without this flag the proxy tries the public path and
+# fails with "instance does not have IP of type PUBLIC". Also means this
+# script only works from somewhere with actual network reachability to
+# the private IP: inside the VPC (e.g. as a one-off Kubernetes Job on the
+# GKE cluster, using a KSA already bound to a GSA with roles/cloudsql.client
+# via Workload Identity — no separate credentials needed there) or a
+# bastion/Cloud Shell with VPC peering. Running this from an arbitrary
+# machine outside the VPC will hang waiting for a TCP connection that can
+# never complete, regardless of IAM permissions.
+cloud-sql-proxy --port 5433 --private-ip "${INSTANCE_CONNECTION_NAME}" &
 PROXY_PID=$!
 trap 'kill ${PROXY_PID} 2>/dev/null || true' EXIT
 

@@ -4,6 +4,15 @@
 # credentials. No service account key file is ever generated, stored as a
 # GitHub secret, or rotated by hand — the trust relationship below is the
 # entire credential.
+#
+# This pool ("github-actions") already existed in this project before
+# StaffStream — another app here (draj1979/vitaliq-app2) already uses it
+# via its own provider ("github", a different provider_id from
+# "github-actions" below, so the two coexist without collision) and its
+# own GSA. Imported into this state deliberately (shared, not
+# StaffStream-exclusive) rather than StaffStream minting a second,
+# redundant pool — see the provider block below for StaffStream's own,
+# separately-scoped trust boundary within it.
 resource "google_iam_workload_identity_pool" "github" {
   project                   = var.project_id
   workload_identity_pool_id = "github-actions"

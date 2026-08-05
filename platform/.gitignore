@@ -27,5 +27,6 @@ infra/k8s/secret.yaml
 *.tfstate
 *.tfstate.*
 *.tfplan
+tfplan*
 *.tfvars
 !terraform.tfvars.example

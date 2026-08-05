@@ -6,7 +6,7 @@ variable "project_id" {
 variable "region" {
   description = "Primary region for every regional resource (GKE Autopilot, Cloud SQL, Memorystore, Artifact Registry)."
   type        = string
-  default     = "us-central1"
+  default     = "asia-south1"
 }
 
 variable "environment" {

@@ -118,38 +118,38 @@ patches:
 # deliberately the one file/field CI touches.
 images:
   - name: staffstream/tenant-service
-    newName: __GCP_REGION__-docker.pkg.dev/__GCP_PROJECT_ID__/staffstream/tenant-service
+    newName: asia-south1-docker.pkg.dev/rational-medley-466807-b3/staffstream/tenant-service
     newTag: latest
   - name: staffstream/employee-service
-    newName: __GCP_REGION__-docker.pkg.dev/__GCP_PROJECT_ID__/staffstream/employee-service
+    newName: asia-south1-docker.pkg.dev/rational-medley-466807-b3/staffstream/employee-service
     newTag: latest
   - name: staffstream/auth-service
-    newName: __GCP_REGION__-docker.pkg.dev/__GCP_PROJECT_ID__/staffstream/auth-service
+    newName: asia-south1-docker.pkg.dev/rational-medley-466807-b3/staffstream/auth-service
     newTag: latest
   - name: staffstream/agent-registry
-    newName: __GCP_REGION__-docker.pkg.dev/__GCP_PROJECT_ID__/staffstream/agent-registry
+    newName: asia-south1-docker.pkg.dev/rational-medley-466807-b3/staffstream/agent-registry
     newTag: latest
   - name: staffstream/llm-gateway
-    newName: __GCP_REGION__-docker.pkg.dev/__GCP_PROJECT_ID__/staffstream/llm-gateway
+    newName: asia-south1-docker.pkg.dev/rational-medley-466807-b3/staffstream/llm-gateway
     newTag: latest
   - name: staffstream/openclaw-runtime
-    newName: __GCP_REGION__-docker.pkg.dev/__GCP_PROJECT_ID__/staffstream/openclaw-runtime
+    newName: asia-south1-docker.pkg.dev/rational-medley-466807-b3/staffstream/openclaw-runtime
     newTag: latest
   - name: staffstream/memory-service
-    newName: __GCP_REGION__-docker.pkg.dev/__GCP_PROJECT_ID__/staffstream/memory-service
+    newName: asia-south1-docker.pkg.dev/rational-medley-466807-b3/staffstream/memory-service
     newTag: latest
   - name: staffstream/knowledge-service
-    newName: __GCP_REGION__-docker.pkg.dev/__GCP_PROJECT_ID__/staffstream/knowledge-service
+    newName: asia-south1-docker.pkg.dev/rational-medley-466807-b3/staffstream/knowledge-service
     newTag: latest
   - name: staffstream/api-gateway
-    newName: __GCP_REGION__-docker.pkg.dev/__GCP_PROJECT_ID__/staffstream/api-gateway
+    newName: asia-south1-docker.pkg.dev/rational-medley-466807-b3/staffstream/api-gateway
     newTag: latest
   - name: staffstream/analytics-service
-    newName: __GCP_REGION__-docker.pkg.dev/__GCP_PROJECT_ID__/staffstream/analytics-service
+    newName: asia-south1-docker.pkg.dev/rational-medley-466807-b3/staffstream/analytics-service
     newTag: latest
   - name: staffstream/skill-marketplace
-    newName: __GCP_REGION__-docker.pkg.dev/__GCP_PROJECT_ID__/staffstream/skill-marketplace
+    newName: asia-south1-docker.pkg.dev/rational-medley-466807-b3/staffstream/skill-marketplace
     newTag: latest
   - name: staffstream/audit-service
-    newName: __GCP_REGION__-docker.pkg.dev/__GCP_PROJECT_ID__/staffstream/audit-service
+    newName: asia-south1-docker.pkg.dev/rational-medley-466807-b3/staffstream/audit-service
     newTag: latest

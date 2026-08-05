@@ -3,6 +3,12 @@
 # ../k8s/overlays/gcp/secret-provider-classes.yaml mount from, replacing
 # the flat staffstream-secrets Kubernetes Secret the local/docker-compose
 # deployment still uses (see infra/k8s/secret.example.yaml).
+#
+# Two of these ("ANTHROPIC_API_KEY", "VOYAGE_API_KEY") already existed in
+# this project before StaffStream, owned by another app sharing this
+# project, and were imported into this state deliberately — see the
+# shared_preexisting_secret_ids local below for why they're excluded from
+# placeholder-version creation.
 resource "google_secret_manager_secret" "this" {
   for_each  = toset(local.all_secret_ids)
   project   = var.project_id
@@ -65,6 +71,19 @@ locals {
     local.redis_url_secret,
   )
 
+  # ANTHROPIC_API_KEY and VOYAGE_API_KEY: this project already had secrets
+  # under these exact names before this config ever ran (another app in
+  # the same project, sharing this project rather than a dedicated one —
+  # see the import block below), each already carrying real, in-use
+  # versions. Writing a placeholder version here would become the new
+  # "latest" and break that other app's next pod restart/CSI remount — so
+  # these two are deliberately excluded from placeholder creation
+  # entirely. StaffStream's llm-gateway/knowledge-service read whatever
+  # "latest" already is, i.e. they share that other app's real key. If
+  # that's ever not the intent, the fix is to stop sharing (re-point these
+  # two at StaffStream-only secret ids) rather than to re-add them here.
+  shared_preexisting_secret_ids = ["ANTHROPIC_API_KEY", "VOYAGE_API_KEY"]
+
   # Everything else: created with a placeholder first version so the
   # cluster is fully bootable (every SecretProviderClass has *something*
   # to mount — see that file's comment on why an empty/missing secret
@@ -74,7 +93,11 @@ locals {
   #   gcloud secrets versions add SLACK_CLIENT_ID --project=$PROJECT_ID --data-file=-
   # then restart the owning pod(s) to pick it up (CSI driver reads
   # "latest" at mount time, not continuously).
-  manual_secret_ids = [for id in local.all_secret_ids : id if !contains(keys(local.terraform_known_secret_values), id)]
+  manual_secret_ids = [
+    for id in local.all_secret_ids : id
+    if !contains(keys(local.terraform_known_secret_values), id)
+    && !contains(local.shared_preexisting_secret_ids, id)
+  ]
 }
 
 resource "google_secret_manager_secret_version" "terraform_known" {
