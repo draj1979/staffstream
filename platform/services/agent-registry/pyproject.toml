@@ -13,11 +13,13 @@ dependencies = [
     "pydantic-settings>=2.6",
     "tenancy",
     "auth",
+    "events",
 ]
 
 [tool.uv.sources]
 tenancy = { workspace = true }
 auth = { workspace = true }
+events = { workspace = true }
 
 [dependency-groups]
 dev = ["aiosqlite>=0.20"]

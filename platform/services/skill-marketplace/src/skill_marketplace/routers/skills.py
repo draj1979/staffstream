@@ -1,15 +1,21 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from auth import Principal, require_auth
+from auth import Principal, Role, require_auth, require_role
+from events import ROUTING_KEY_AUDIT, AuditEvent, Publisher, schedule_publish
 
 from .. import crud
 from ..connectors import CONNECTOR_REGISTRY
 from ..db import get_db
+from ..dependencies import get_publisher
 from ..schemas import SkillEnablementOut, SkillEnablementUpdate, ToolOut
 
 router = APIRouter(tags=["skills"])
 user_auth = require_auth()
+# Turning a skill on/off for the whole tenant is admin-only — every
+# employee who happens to have a manager/employee role shouldn't be able
+# to widen or shrink what's available platform-wide.
+admin_auth = require_role(Role.ADMIN.value)
 
 
 @router.get("/skills", response_model=list[SkillEnablementOut])
@@ -42,7 +48,9 @@ async def list_skills(
 async def set_skill_enablement(
     skill_id: str,
     data: SkillEnablementUpdate,
-    principal: Principal = Depends(user_auth),
+    request: Request,
+    principal: Principal = Depends(admin_auth),
+    publisher: Publisher = Depends(get_publisher),
     db: AsyncSession = Depends(get_db),
 ):
     skill = await crud.get_skill(db, skill_id)
@@ -50,6 +58,18 @@ async def set_skill_enablement(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Unknown skill")
 
     enablement = await crud.set_enablement(db, skill_id, enabled=data.enabled, config=data.config)
+
+    event = AuditEvent(
+        tenant_id=principal.tenant_id,
+        actor_employee_id=principal.employee_id,
+        action="skill.enablement_changed",
+        target_type="skill",
+        target_id=skill_id,
+        metadata={"enabled": data.enabled},
+    )
+    schedule_publish(
+        request.app.state, publisher, ROUTING_KEY_AUDIT, event.model_dump_json().encode()
+    )
     return SkillEnablementOut(
         skill_id=skill.skill_id,
         name=skill.name,

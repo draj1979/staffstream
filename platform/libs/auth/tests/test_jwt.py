@@ -22,6 +22,15 @@ def test_access_token_round_trips_tenant_and_employee():
     assert claims["tenant_id"] == str(tenant_id)
     assert claims["sub"] == str(employee_id)
     assert claims["scope"] == "user"
+    assert claims["role"] == "employee"  # default when no role is passed
+
+
+def test_access_token_embeds_explicit_role():
+    tenant_id, employee_id = uuid.uuid4(), uuid.uuid4()
+    token = encode_access_token(tenant_id, employee_id, role="admin")
+
+    claims = decode_token(token)
+    assert claims["role"] == "admin"
 
 
 def test_system_token_has_system_scope_and_no_employee():

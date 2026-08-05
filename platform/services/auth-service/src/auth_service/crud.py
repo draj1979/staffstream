@@ -5,7 +5,8 @@ from datetime import UTC, datetime
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from .models import Credential, RefreshToken
+from .crypto import encrypt_secret
+from .models import Credential, RefreshToken, SsoConnection
 
 
 def hash_token(raw_token: str) -> str:
@@ -61,3 +62,49 @@ async def get_active_refresh_token(db: AsyncSession, raw_token: str) -> RefreshT
 async def revoke_refresh_token(db: AsyncSession, token: RefreshToken) -> None:
     token.revoked_at = datetime.now(UTC)
     await db.commit()
+
+
+async def get_sso_connection(db: AsyncSession, provider: str) -> SsoConnection | None:
+    result = await db.execute(select(SsoConnection).where(SsoConnection.provider == provider))
+    return result.scalar_one_or_none()
+
+
+async def list_sso_connections(db: AsyncSession) -> list[SsoConnection]:
+    result = await db.execute(select(SsoConnection))
+    return list(result.scalars().all())
+
+
+async def upsert_sso_connection(
+    db: AsyncSession,
+    provider: str,
+    *,
+    client_id: str,
+    client_secret: str,
+    issuer_domain: str | None,
+    hosted_domain: str | None,
+    enabled: bool,
+) -> SsoConnection:
+    existing = await get_sso_connection(db, provider)
+    encrypted = encrypt_secret(client_secret)
+    if existing is not None:
+        existing.client_id = client_id
+        existing.client_secret_encrypted = encrypted
+        existing.issuer_domain = issuer_domain
+        existing.hosted_domain = hosted_domain
+        existing.enabled = enabled
+        await db.commit()
+        await db.refresh(existing)
+        return existing
+
+    connection = SsoConnection(
+        provider=provider,
+        client_id=client_id,
+        client_secret_encrypted=encrypted,
+        issuer_domain=issuer_domain,
+        hosted_domain=hosted_domain,
+        enabled=enabled,
+    )
+    db.add(connection)
+    await db.commit()
+    await db.refresh(connection)
+    return connection

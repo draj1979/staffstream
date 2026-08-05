@@ -11,7 +11,10 @@ from tenancy import reset_current_tenant_id, set_current_tenant_id
 
 
 def headers(tenant_id: uuid.UUID, employee_id: uuid.UUID) -> dict:
-    token = encode_access_token(tenant_id, employee_id)
+    # admin role: these tests exercise the invoke flow, and the same
+    # principal also flips skill enablement on along the way (now
+    # admin-gated) — not testing RBAC scoping itself here.
+    token = encode_access_token(tenant_id, employee_id, role="admin")
     return {"Authorization": f"Bearer {token}"}
 
 

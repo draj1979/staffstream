@@ -6,21 +6,21 @@ from auth.config import ACCESS_TOKEN_TTL_SECONDS, REFRESH_TOKEN_TTL_DAYS
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from auth import encode_access_token, hash_password, verify_password
+from auth import encode_access_token, hash_password, highest_role, verify_password
 from tenancy import tenant_context
 
 from .. import crud
 from ..db import get_db
-from ..employee_client import EmployeeServiceError, create_employee
+from ..employee_client import EmployeeServiceError, create_employee, get_employee
 from ..schemas import LoginRequest, LogoutRequest, RefreshRequest, SignupRequest, TokenPair
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 
 async def _issue_token_pair(
-    db: AsyncSession, tenant_id: uuid.UUID, employee_id: uuid.UUID
+    db: AsyncSession, tenant_id: uuid.UUID, employee_id: uuid.UUID, *, role: str
 ) -> TokenPair:
-    access_token = encode_access_token(tenant_id, employee_id)
+    access_token = encode_access_token(tenant_id, employee_id, role=role)
     raw_refresh_token = secrets.token_urlsafe(32)
     expires_at = datetime.now(UTC) + timedelta(days=REFRESH_TOKEN_TTL_DAYS)
     await crud.create_refresh_token(
@@ -66,7 +66,9 @@ async def signup(
         email=data.email,
         password_hash=hash_password(data.password),
     )
-    return await _issue_token_pair(db, tenant_id, employee_id)
+    return await _issue_token_pair(
+        db, tenant_id, employee_id, role=highest_role(employee.get("roles", []))
+    )
 
 
 @router.post("/login", response_model=TokenPair)
@@ -80,7 +82,8 @@ async def login(
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid email or password"
         )
-    return await _issue_token_pair(db, tenant_id, credential.employee_id)
+    role = await _current_role(tenant_id, credential.employee_id)
+    return await _issue_token_pair(db, tenant_id, credential.employee_id, role=role)
 
 
 @router.post("/refresh", response_model=TokenPair)
@@ -98,7 +101,8 @@ async def refresh(
     # Rotate: the presented token is single-use, so a stolen-and-replayed
     # refresh token stops working the moment the legitimate client uses it.
     await crud.revoke_refresh_token(db, token)
-    return await _issue_token_pair(db, tenant_id, token.employee_id)
+    role = await _current_role(tenant_id, token.employee_id)
+    return await _issue_token_pair(db, tenant_id, token.employee_id, role=role)
 
 
 @router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
@@ -110,3 +114,16 @@ async def logout(
     token = await crud.get_active_refresh_token(db, data.refresh_token)
     if token is not None:
         await crud.revoke_refresh_token(db, token)
+
+
+async def _current_role(tenant_id: uuid.UUID, employee_id: uuid.UUID) -> str:
+    """Always re-fetched from Employee Service, never cached — a role
+    change (Phase 9's RBAC) takes effect on this employee's very next
+    login/refresh, not whenever some cached copy happens to expire."""
+    try:
+        employee = await get_employee(tenant_id, employee_id)
+    except EmployeeServiceError:
+        return "employee"
+    if employee is None:
+        return "employee"
+    return highest_role(employee.get("roles", []))

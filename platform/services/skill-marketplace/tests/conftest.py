@@ -1,13 +1,16 @@
+import asyncio
+
 import httpx
 import pytest
 from httpx import ASGITransport, AsyncClient
 from skill_marketplace import db
 from skill_marketplace.db import get_db
-from skill_marketplace.dependencies import get_http_client
+from skill_marketplace.dependencies import get_http_client, get_publisher
 from skill_marketplace.main import app
 from skill_marketplace.models import Skill
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from events import Publisher
 from tenancy import Base, make_engine, make_session_factory
 
 
@@ -69,8 +72,30 @@ def http_handler():
     return HandlerBox()
 
 
+class FakePublisher(Publisher):
+    """Records every publish call and lets tests await until the
+    fire-and-forget task on the other side has actually run — the route
+    schedules with asyncio.create_task and returns before it completes."""
+
+    def __init__(self):
+        self.published: list[tuple[str, bytes]] = []
+        self._event = asyncio.Event()
+
+    async def publish(self, routing_key: str, payload: bytes) -> None:
+        self.published.append((routing_key, payload))
+        self._event.set()
+
+    async def wait_for_publish(self, timeout: float = 1.0) -> None:
+        await asyncio.wait_for(self._event.wait(), timeout=timeout)
+
+
 @pytest.fixture
-async def client(session_factory, http_handler):
+def fake_publisher():
+    return FakePublisher()
+
+
+@pytest.fixture
+async def client(session_factory, http_handler, fake_publisher):
     async def override_get_db() -> AsyncSession:
         async with session_factory() as session:
             yield session
@@ -82,6 +107,7 @@ async def client(session_factory, http_handler):
 
     app.dependency_overrides[get_db] = override_get_db
     app.dependency_overrides[get_http_client] = lambda: mock_client
+    app.dependency_overrides[get_publisher] = lambda: fake_publisher
     try:
         transport = ASGITransport(app=app)
         async with AsyncClient(transport=transport, base_url="http://test") as ac:

@@ -12,7 +12,7 @@ and integrations — is the actual product.
 
 ## Build phase (update this as phases complete)
 
-Current phase: **8 — Skill Marketplace + first connectors (Slack, Google Calendar)**
+Current phase: **9 — SSO (Google Workspace, Auth0), RBAC/ABAC, audit logging**
 
 Do not implement components outside the current phase unless explicitly asked.
 Phases:

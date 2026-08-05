@@ -32,6 +32,11 @@ async def get_employee(db: AsyncSession, employee_id: uuid.UUID) -> Employee | N
     return await db.get(Employee, employee_id)
 
 
+async def get_employee_by_email(db: AsyncSession, email: str) -> Employee | None:
+    result = await db.execute(select(Employee).where(Employee.email == email))
+    return result.scalar_one_or_none()
+
+
 async def list_employees(db: AsyncSession, limit: int = 100, offset: int = 0) -> list[Employee]:
     result = await db.execute(
         select(Employee).limit(limit).offset(offset).order_by(Employee.created_at)

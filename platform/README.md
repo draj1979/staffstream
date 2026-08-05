@@ -10,20 +10,20 @@ conventions.
 
 ## Current phase
 
-**Phase 8 — Skill Marketplace: a per-tenant skill registry, per-employee
-OAuth connectors, and the first two skills (Slack, Google Calendar) wired
-into OpenClaw's tool-calling loop.**
+**Phase 9 — SSO (Google Workspace, Auth0), RBAC/ABAC, and platform-wide
+audit logging.**
 
 ## Stack
 
 - Backend APIs: FastAPI (Python 3.12), dependency/task management via [uv](https://docs.astral.sh/uv/)
 - DB: PostgreSQL (one logical database per service) — Cache: Redis
 - Migrations: Alembic — CI: GitHub Actions
-- Auth: argon2 password hashing, HS256 JWT access tokens, opaque hashed refresh tokens
+- Auth: argon2 password hashing, HS256 JWT access tokens (embed a `role` claim), opaque hashed refresh tokens
+- SSO: OIDC (Google Workspace, Auth0) mapped onto the existing employee_id/tenant_id model — no parallel identity system
 - LLM: Anthropic Claude via the official SDK, behind a provider-abstraction interface, with tool-calling
 - Embeddings: Voyage AI (`voyage-3-lite`, 512-dim) — Vector DB: pgvector
 - Containers: one Dockerfile per service — Orchestration: Kubernetes (single namespace)
-- Events: RabbitMQ (topic exchange) — LLM usage / chat interaction / skill usage events, consumed by Analytics Service
+- Events: RabbitMQ (topic exchange) — LLM usage / chat interaction / skill usage / audit events
 - Connectors: Slack (OAuth v2 user token), Google Calendar (OAuth2 + refresh) — tokens encrypted at rest (Fernet)
 
 ## Tenant isolation
@@ -49,10 +49,14 @@ issues tokens or touches credentials:
   moment it's used, so a stolen-and-replayed token stops working)
 - `POST /auth/logout` — revokes a refresh token
 
-Access tokens are short-lived JWTs (15 min default) carrying `tenant_id` and
-`sub` (employee_id) in the claims — see [libs/auth/src/auth/jwt.py](libs/auth/src/auth/jwt.py).
-Refresh tokens are opaque random strings; only their SHA-256 hash is stored,
-so they can be genuinely revoked (unlike a stateless JWT, which can't be
+Access tokens are short-lived JWTs (15 min default) carrying `tenant_id`,
+`sub` (employee_id), and (Phase 9) `role` in the claims — see
+[libs/auth/src/auth/jwt.py](libs/auth/src/auth/jwt.py). The role is always
+re-fetched from Employee Service at token-mint time (login, refresh, SSO
+callback), never cached, so a role change takes effect on the very next
+token issuance, not whenever some cached copy happens to expire. Refresh
+tokens are opaque random strings; only their SHA-256 hash is stored, so
+they can be genuinely revoked (unlike a stateless JWT, which can't be
 un-issued before it expires).
 
 Every route in Tenant Service and Employee Service now requires a bearer
@@ -334,12 +338,115 @@ access/system tokens) carrying `tenant_id`/`employee_id`/`skill_id`, and
 `/callback` trusts only what it can verify out of that token — never
 anything from the request's own query string.
 
+## RBAC & ABAC
+
+Three fixed roles, ranked `admin > manager > employee`
+([libs/auth/src/auth/roles.py](libs/auth/src/auth/roles.py)) — scoped per
+tenant by construction, since `role` only ever means something relative
+to the token's own `tenant_id`. `require_role(minimum)`
+([libs/auth/src/auth/dependency.py](libs/auth/src/auth/dependency.py))
+composes `require_auth` with a hierarchy check ("at least this rank", not
+an exact match) and is the one dependency every RBAC-gated route uses:
+
+| Action | Minimum role |
+|---|---|
+| `PATCH /tenants/{id}` (tenant settings) | admin |
+| `POST`/`PATCH /employees` via a user token (not the signup bootstrap) | manager |
+| Changing an employee's `roles` | admin |
+| `GET /agents` (list every agent in the tenant) | manager |
+| `PATCH /agents/{id}` for someone else's agent | admin |
+| `PUT /skills/{id}/enablement` | admin |
+| `PUT /auth/sso/config/{provider}` | admin |
+
+A `manager`-ranked token gets a further ABAC check on top of the role
+check, in [employee_service/routers/employees.py](services/employee-service/src/employee_service/routers/employees.py):
+they may only create or update employees whose `department` matches
+their own (looked up fresh from their own Employee row on every request,
+never cached), and they can never change an employee's `department` or
+`roles` at all — only an admin can move someone between departments or
+grant/revoke a role. An `admin` bypasses the department check entirely.
+Department-scoped **knowledge** access from Phase 5 (personal + own
+department + company-wide) is the other ABAC example already in the
+platform — nothing new needed there this phase, just cited as the
+pattern this phase's checks follow.
+
+Agent Registry applies simpler ownership-or-role gating rather than
+department ABAC: an employee can always read/update their own agent;
+`manager`+ can read anyone's; only `admin` (or the employee themselves)
+can edit someone else's — see
+[agent_registry/routers/agents.py](services/agent-registry/src/agent_registry/routers/agents.py).
+
+## SSO
+
+`services/auth-service` gained `services/auth-service/src/auth_service/oidc.py`
+— one generic OpenID Connect implementation shared by both providers
+(Google Workspace and Auth0 are both standard OIDC; a provider only
+differs in its discovery URL and Google's optional `hd` hosted-domain
+restriction). Every network call (discovery, token exchange, JWKS fetch)
+takes the httpx client to use rather than making its own, so tests
+exercise real RS256 signature verification against a test keypair
+through `httpx.MockTransport`, not a mocked-away crypto layer.
+
+Each tenant configures their own IdP — `SsoConnection`
+(tenant-scoped, `client_secret` Fernet-encrypted at rest, same pattern as
+Skill Marketplace's OAuth tokens) — via `PUT /auth/sso/config/{provider}`
+(admin-only). `GET /auth/sso/login/{tenant_id}/{provider}` redirects to
+the IdP with a signed state token (`auth.encode_state_token`, same
+mechanism as Skill Marketplace's OAuth state); `GET /auth/sso/callback/{provider}`
+verifies the id_token's signature, issuer, and audience, then maps the
+verified email straight onto Employee Service's existing
+`(tenant_id, employee_id)` model via `GET /employees/by-email/{email}` —
+**no parallel identity system**, and deliberately **no JIT auto-
+provisioning** this phase: if no employee matches, the callback 404s
+rather than minting a new one. An admin creates the employee record
+first (same as any other employee), then that person can log in via SSO.
+The role embedded in the resulting token comes from that employee's
+current `roles`, exactly like password login.
+
+The Phase 2 email/password path (`/auth/signup`, `/auth/login`,
+`/auth/refresh`, `/auth/logout`) is completely untouched and still the
+default — SSO is an additional login path per tenant, not a replacement.
+
+## Audit Logging
+
+`services/audit-service` (port 8011) stores an immutable, tenant-scoped
+log of every state-changing action across the platform — employee CRUD,
+role changes, skill enablement, OAuth connect/revoke, and tenant settings
+changes, per CLAUDE.md's security baseline. It follows the exact same
+event-sourcing pattern Analytics Service established in Phase 7: a new
+`AuditEvent` schema in [libs/events](libs/events), a `ROUTING_KEY_AUDIT`
+routing key on the shared `staffstream.events` exchange, and a background
+RabbitMQ consumer that writes one row per event. `AuditLogEntry`
+(`tenant_id`, `actor_employee_id`, `action`, `target_type`, `target_id`,
+`metadata`, `created_at`) has **no update or delete route anywhere in
+this service** — not "soft-protected", just structurally incapable of it,
+since `crud.py` never defines those functions. A real deployment should
+also grant the service's DB role only `INSERT`/`SELECT` on this table, so
+the immutability guarantee doesn't rest on "nobody wrote the route" alone.
+
+Every producer publishes fire-and-forget via `events.schedule_publish` (a
+new shared helper pulled out of the hand-written version LLM Gateway and
+OpenClaw Runtime each had in Phases 7/8 — same `asyncio.create_task` +
+`app.state.background_tasks` + swallow-and-log pattern, now factored out
+since a fourth call site needed the identical dozen lines): Tenant
+Service (`tenant.updated`), Employee Service (`employee.created`,
+`employee.updated`, `employee.role_changed`), Agent Registry
+(`agent.updated`), Skill Marketplace (`skill.enablement_changed`,
+`skill.connected`, `skill.disconnected`), and Auth Service
+(`sso.config_changed`).
+
+`GET /audit-logs` (admin-only, tenant-scoped through the standard
+tenancy layer) supports filtering by `action`, `target_type`,
+`actor_employee_id`, and a `from_date`/`to_date` range. Not routed
+through the API Gateway — an internal/admin-facing read API, same
+precedent as Analytics Service.
+
 ## Containers & Kubernetes
 
 Every service has its own `Dockerfile` (multi-stage, `uv`-based, built
 from the repo root since this is a uv workspace — see any service's
-Dockerfile for the exact command). `make docker-build` builds all eleven.
-`infra/k8s/` has Deployment + Service manifests for all eleven plus the
+Dockerfile for the exact command). `make docker-build` builds all twelve.
+`infra/k8s/` has Deployment + Service manifests for all twelve plus the
 namespace, ConfigMap, Secret template, and in-cluster Postgres/Redis/RabbitMQ —
 see [infra/k8s/README.md](infra/k8s/README.md) for the full deploy flow.
 Every Deployment's `livenessProbe` hits `/healthz` (process alive — never
@@ -371,9 +478,10 @@ make run-knowledge-service  # http://localhost:8008
 make run-api-gateway        # http://localhost:8000
 make run-analytics-service  # http://localhost:8009
 make run-skill-marketplace  # http://localhost:8010
+make run-audit-service      # http://localhost:8011
 make down     # stop containers
 
-make docker-build   # build all 11 service images (staffstream/<service>:latest)
+make docker-build   # build all 12 service images (staffstream/<service>:latest)
 ```
 
 To try the whole platform containerized rather than via `make run-*`, see
@@ -393,21 +501,24 @@ provider. Same story for `SLACK_CLIENT_ID`/`SLACK_CLIENT_SECRET` and
 `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET` — Skill Marketplace starts fine
 without a real Slack app or Google Cloud OAuth client registered, an
 OAuth authorize/exchange just fails with a normal error from the
-provider until they're set. `OAUTH_ENCRYPTION_KEY` has a working local-dev
-default but should be regenerated per real environment (see
-`.env.example`'s comment for the one-liner).
+provider until they're set. `OAUTH_ENCRYPTION_KEY` / `SSO_ENCRYPTION_KEY`
+have working local-dev defaults but should each be regenerated per real
+environment (see `.env.example`'s comment for the one-liner). SSO itself
+needs no service-level credentials at all to start — each tenant supplies
+their own Google Workspace/Auth0 client ID and secret via
+`PUT /auth/sso/config/{provider}` at runtime, not an env var.
 
 ## Layout
 
 ```
 libs/
   tenancy/            shared tenant-isolation ORM base + session middleware
-  auth/                shared JWT issuance/verification + password hashing + signed OAuth state tokens
-  events/              shared event schemas + RabbitMQ pub/sub (publisher, consumer)
+  auth/                shared JWT issuance/verification (incl. role claim + require_role RBAC), password hashing, signed state tokens
+  events/              shared event schemas + RabbitMQ pub/sub (publisher, consumer, schedule_publish)
 services/
-  tenant-service/      Tenant CRUD: plan, storage quota, LLM config, branding, subscription
-  employee-service/    Employee CRUD: department, designation, manager, roles, agent_id
-  auth-service/        Signup, login, refresh, logout — the only service touching credentials
+  tenant-service/      Tenant CRUD: plan, storage quota, LLM config, branding, subscription — admin-only updates
+  employee-service/    Employee CRUD: department, designation, manager, roles, agent_id — RBAC + department ABAC
+  auth-service/        Signup/login/refresh/logout (password) + SSO (Google Workspace, Auth0) — the only service touching credentials
   agent-registry/      One agent profile per employee: model, prompt, temperature, memory namespace, ...
   llm-gateway/          Provider abstraction over LLMs; Claude only for now — emits LLM usage events
   openclaw-runtime/     Stateless: POST /chat — loads agent + memory + knowledge + skills, tool-calling loop, emits chat/skill events
@@ -416,6 +527,7 @@ services/
   api-gateway/          Front door: per-tenant rate limiting, size limits, sanitized errors, reverse proxy
   analytics-service/    Usage/tokens/cost/health from queued events — Admin/Finance/IT dashboards
   skill-marketplace/    Skill registry, per-tenant enablement, per-employee OAuth (Slack, Google Calendar)
+  audit-service/        Immutable, tenant-scoped audit trail of every state-changing action
 tests/                 root-level smoke tests
 docs/                  architecture and design docs
 infra/

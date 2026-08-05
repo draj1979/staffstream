@@ -3,7 +3,11 @@ from logging.config import fileConfig
 
 from alembic import context
 from auth_service.config import settings
-from auth_service.models import Credential, RefreshToken  # noqa: F401  (registers model metadata)
+from auth_service.models import (  # noqa: F401  (registers model metadata)
+    Credential,
+    RefreshToken,
+    SsoConnection,
+)
 from sqlalchemy import pool
 from sqlalchemy.ext.asyncio import async_engine_from_config
 

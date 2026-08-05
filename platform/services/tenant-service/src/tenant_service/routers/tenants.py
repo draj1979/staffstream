@@ -1,12 +1,14 @@
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from auth import Principal, require_auth
+from auth import Principal, Role, require_auth, require_role
+from events import ROUTING_KEY_AUDIT, AuditEvent, Publisher, schedule_publish
 
 from .. import crud
 from ..db import get_db
+from ..dependencies import get_publisher
 from ..schemas import TenantCreate, TenantOut, TenantUpdate
 
 router = APIRouter(prefix="/tenants", tags=["tenants"])
@@ -14,10 +16,12 @@ router = APIRouter(prefix="/tenants", tags=["tenants"])
 # Only a platform-internal caller (system-scoped token) may list every
 # tenant — no employee JWT should ever see other companies' tenant rows.
 system_auth = require_auth(allowed_scopes=("system",))
-# Reading/updating a specific tenant requires a real employee of THAT
-# tenant (enforced below, since Tenant isn't itself tenant-scoped and so
-# gets no automatic filtering from the tenancy ORM layer).
+# Reading a specific tenant requires a real employee of THAT tenant
+# (enforced below, since Tenant isn't itself tenant-scoped and so gets no
+# automatic filtering from the tenancy ORM layer).
 user_auth = require_auth()
+# Changing tenant settings is admin-only, on top of the same-tenant check.
+admin_auth = require_role(Role.ADMIN.value)
 
 
 def _require_self_tenant(principal: Principal, tenant_id: uuid.UUID) -> None:
@@ -63,11 +67,26 @@ async def get_tenant(
 async def update_tenant(
     tenant_id: uuid.UUID,
     data: TenantUpdate,
-    principal: Principal = Depends(user_auth),
+    request: Request,
+    principal: Principal = Depends(admin_auth),
+    publisher: Publisher = Depends(get_publisher),
     db: AsyncSession = Depends(get_db),
 ):
     _require_self_tenant(principal, tenant_id)
     tenant = await crud.get_tenant(db, tenant_id)
     if tenant is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found")
-    return await crud.update_tenant(db, tenant, data)
+    updated = await crud.update_tenant(db, tenant, data)
+
+    event = AuditEvent(
+        tenant_id=tenant_id,
+        actor_employee_id=principal.employee_id,
+        action="tenant.updated",
+        target_type="tenant",
+        target_id=str(tenant_id),
+        metadata=data.model_dump(exclude_unset=True),
+    )
+    schedule_publish(
+        request.app.state, publisher, ROUTING_KEY_AUDIT, event.model_dump_json().encode()
+    )
+    return updated

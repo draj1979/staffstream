@@ -12,6 +12,7 @@ members = [
     "agent-registry",
     "analytics-service",
     "api-gateway",
+    "audit-service",
     "auth",
     "auth-service",
     "employee-service",
@@ -34,6 +35,7 @@ dependencies = [
     { name = "alembic" },
     { name = "asyncpg" },
     { name = "auth" },
+    { name = "events" },
     { name = "fastapi" },
     { name = "pydantic" },
     { name = "pydantic-settings" },
@@ -52,6 +54,7 @@ requires-dist = [
     { name = "alembic", specifier = ">=1.14" },
     { name = "asyncpg", specifier = ">=0.30" },
     { name = "auth", editable = "libs/auth" },
+    { name = "events", editable = "libs/events" },
     { name = "fastapi", specifier = ">=0.115" },
     { name = "pydantic", specifier = ">=2.9" },
     { name = "pydantic-settings", specifier = ">=2.6" },
@@ -453,6 +456,45 @@ wheels = [
 ]
 
 [[package]]
+name = "audit-service"
+version = "0.1.0"
+source = { editable = "services/audit-service" }
+dependencies = [
+    { name = "alembic" },
+    { name = "asyncpg" },
+    { name = "auth" },
+    { name = "events" },
+    { name = "fastapi" },
+    { name = "pydantic" },
+    { name = "pydantic-settings" },
+    { name = "sqlalchemy", extra = ["asyncio"] },
+    { name = "tenancy" },
+    { name = "uvicorn", extra = ["standard"] },
+]
+
+[package.dev-dependencies]
+dev = [
+    { name = "aiosqlite" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "alembic", specifier = ">=1.14" },
+    { name = "asyncpg", specifier = ">=0.30" },
+    { name = "auth", editable = "libs/auth" },
+    { name = "events", editable = "libs/events" },
+    { name = "fastapi", specifier = ">=0.115" },
+    { name = "pydantic", specifier = ">=2.9" },
+    { name = "pydantic-settings", specifier = ">=2.6" },
+    { name = "sqlalchemy", extras = ["asyncio"], specifier = ">=2.0.36" },
+    { name = "tenancy", editable = "libs/tenancy" },
+    { name = "uvicorn", extras = ["standard"], specifier = ">=0.32" },
+]
+
+[package.metadata.requires-dev]
+dev = [{ name = "aiosqlite", specifier = ">=0.20" }]
+
+[[package]]
 name = "auth"
 version = "0.1.0"
 source = { editable = "libs/auth" }
@@ -493,10 +535,13 @@ dependencies = [
     { name = "alembic" },
     { name = "asyncpg" },
     { name = "auth" },
+    { name = "cryptography" },
+    { name = "events" },
     { name = "fastapi" },
     { name = "httpx" },
     { name = "pydantic", extra = ["email"] },
     { name = "pydantic-settings" },
+    { name = "pyjwt", extra = ["crypto"] },
     { name = "sqlalchemy", extra = ["asyncio"] },
     { name = "tenancy" },
     { name = "uvicorn", extra = ["standard"] },
@@ -512,10 +557,13 @@ requires-dist = [
     { name = "alembic", specifier = ">=1.14" },
     { name = "asyncpg", specifier = ">=0.30" },
     { name = "auth", editable = "libs/auth" },
+    { name = "cryptography", specifier = ">=43.0" },
+    { name = "events", editable = "libs/events" },
     { name = "fastapi", specifier = ">=0.115" },
     { name = "httpx", specifier = ">=0.27" },
     { name = "pydantic", extras = ["email"], specifier = ">=2.9" },
     { name = "pydantic-settings", specifier = ">=2.6" },
+    { name = "pyjwt", extras = ["crypto"], specifier = ">=2.9" },
     { name = "sqlalchemy", extras = ["asyncio"], specifier = ">=2.0.36" },
     { name = "tenancy", editable = "libs/tenancy" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.32" },
@@ -798,6 +846,7 @@ dependencies = [
     { name = "alembic" },
     { name = "asyncpg" },
     { name = "auth" },
+    { name = "events" },
     { name = "fastapi" },
     { name = "httpx" },
     { name = "pydantic", extra = ["email"] },
@@ -817,6 +866,7 @@ requires-dist = [
     { name = "alembic", specifier = ">=1.14" },
     { name = "asyncpg", specifier = ">=0.30" },
     { name = "auth", editable = "libs/auth" },
+    { name = "events", editable = "libs/events" },
     { name = "fastapi", specifier = ">=0.115" },
     { name = "httpx", specifier = ">=0.27" },
     { name = "pydantic", extras = ["email"], specifier = ">=2.9" },
@@ -2179,6 +2229,11 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/a3/5e/ecf12fdb62546d64385c158514e9b2b671f7832108ef2ecd2020ce0af2d1/pyjwt-2.13.0-py3-none-any.whl", hash = "sha256:66adcc2aff09b3f1bbd95fc1e1577df8ac8723c978552fd43304c8a290ac5728", size = 31274, upload-time = "2026-05-21T19:54:35.362Z" },
 ]
 
+[package.optional-dependencies]
+crypto = [
+    { name = "cryptography" },
+]
+
 [[package]]
 name = "pypdf"
 version = "6.14.2"
@@ -2364,6 +2419,7 @@ dependencies = [
     { name = "asyncpg" },
     { name = "auth" },
     { name = "cryptography" },
+    { name = "events" },
     { name = "fastapi" },
     { name = "httpx" },
     { name = "pydantic" },
@@ -2384,6 +2440,7 @@ requires-dist = [
     { name = "asyncpg", specifier = ">=0.30" },
     { name = "auth", editable = "libs/auth" },
     { name = "cryptography", specifier = ">=43.0" },
+    { name = "events", editable = "libs/events" },
     { name = "fastapi", specifier = ">=0.115" },
     { name = "httpx", specifier = ">=0.27" },
     { name = "pydantic", specifier = ">=2.9" },
@@ -2459,6 +2516,7 @@ dependencies = [
     { name = "agent-registry" },
     { name = "analytics-service" },
     { name = "api-gateway" },
+    { name = "audit-service" },
     { name = "auth" },
     { name = "auth-service" },
     { name = "employee-service" },
@@ -2486,6 +2544,7 @@ requires-dist = [
     { name = "agent-registry", editable = "services/agent-registry" },
     { name = "analytics-service", editable = "services/analytics-service" },
     { name = "api-gateway", editable = "services/api-gateway" },
+    { name = "audit-service", editable = "services/audit-service" },
     { name = "auth", editable = "libs/auth" },
     { name = "auth-service", editable = "services/auth-service" },
     { name = "employee-service", editable = "services/employee-service" },
@@ -2567,6 +2626,7 @@ dependencies = [
     { name = "alembic" },
     { name = "asyncpg" },
     { name = "auth" },
+    { name = "events" },
     { name = "fastapi" },
     { name = "pydantic" },
     { name = "pydantic-settings" },
@@ -2585,6 +2645,7 @@ requires-dist = [
     { name = "alembic", specifier = ">=1.14" },
     { name = "asyncpg", specifier = ">=0.30" },
     { name = "auth", editable = "libs/auth" },
+    { name = "events", editable = "libs/events" },
     { name = "fastapi", specifier = ">=0.115" },
     { name = "pydantic", specifier = ">=2.9" },
     { name = "pydantic-settings", specifier = ">=2.6" },

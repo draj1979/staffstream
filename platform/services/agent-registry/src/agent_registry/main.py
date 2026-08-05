@@ -1,11 +1,27 @@
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI, Response, status
 
+from events import RabbitMQPublisher
 from tenancy import check_db_ready
 
 from . import db
+from .config import settings
 from .routers.agents import router as agents_router
 
-app = FastAPI(title="Agent Registry")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    app.state.publisher = RabbitMQPublisher(settings.rabbitmq_url)
+    yield
+    await app.state.publisher.close()
+
+
+app = FastAPI(title="Agent Registry", lifespan=lifespan)
+# Not inside lifespan: tests drive the app via ASGITransport, which never
+# runs FastAPI's lifespan events, but routes still need somewhere to hold
+# strong references to their fire-and-forget audit-publish tasks.
+app.state.background_tasks = set()
 app.include_router(agents_router)
 
 

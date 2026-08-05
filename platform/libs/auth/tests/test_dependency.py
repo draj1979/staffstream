@@ -3,7 +3,13 @@ import uuid
 from fastapi import Depends, FastAPI
 from httpx import ASGITransport, AsyncClient
 
-from auth import Principal, encode_access_token, encode_system_token, require_auth
+from auth import (
+    Principal,
+    encode_access_token,
+    encode_system_token,
+    require_auth,
+    require_role,
+)
 from tenancy import try_get_current_tenant_id
 
 
@@ -23,6 +29,14 @@ def build_app():
         principal: Principal = Depends(require_auth(allowed_scopes=("user", "system"))),
     ):
         return {"scope": principal.scope}
+
+    @app.get("/admin-only")
+    async def admin_only(principal: Principal = Depends(require_role("admin"))):
+        return {"role": principal.role}
+
+    @app.get("/manager-or-above")
+    async def manager_or_above(principal: Principal = Depends(require_role("manager"))):
+        return {"role": principal.role}
 
     return app
 
@@ -71,3 +85,40 @@ async def test_garbage_token_is_401():
     async with await _client() as client:
         resp = await client.get("/user-only", headers={"Authorization": "Bearer garbage"})
     assert resp.status_code == 401
+
+
+async def test_access_token_defaults_to_employee_role():
+    tenant_id, employee_id = uuid.uuid4(), uuid.uuid4()
+    token = encode_access_token(tenant_id, employee_id)
+
+    async with await _client() as client:
+        resp = await client.get("/manager-or-above", headers={"Authorization": f"Bearer {token}"})
+    assert resp.status_code == 403  # default "employee" role doesn't satisfy "manager"
+
+
+async def test_access_token_carries_explicit_role():
+    tenant_id, employee_id = uuid.uuid4(), uuid.uuid4()
+    token = encode_access_token(tenant_id, employee_id, role="admin")
+
+    async with await _client() as client:
+        resp = await client.get("/admin-only", headers={"Authorization": f"Bearer {token}"})
+    assert resp.status_code == 200
+    assert resp.json()["role"] == "admin"
+
+
+async def test_require_role_allows_higher_ranked_role():
+    tenant_id, employee_id = uuid.uuid4(), uuid.uuid4()
+    token = encode_access_token(tenant_id, employee_id, role="admin")
+
+    async with await _client() as client:
+        resp = await client.get(
+            "/manager-or-above", headers={"Authorization": f"Bearer {token}"}
+        )
+    assert resp.status_code == 200
+
+
+async def test_require_role_rejects_system_scoped_token():
+    token = encode_system_token(uuid.uuid4())
+    async with await _client() as client:
+        resp = await client.get("/admin-only", headers={"Authorization": f"Bearer {token}"})
+    assert resp.status_code == 403

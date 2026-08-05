@@ -46,14 +46,14 @@ real registry, and pins a real tag instead of `latest`.
   e.g. `http://tenant-service:8001`), `REDIS_URL`, and `RABBITMQ_URL`.
 - `secret.example.yaml` — template for `JWT_SECRET_KEY`, `ANTHROPIC_API_KEY`,
   `VOYAGE_API_KEY`, `OAUTH_ENCRYPTION_KEY` + Slack/Google OAuth app
-  credentials, Postgres credentials, and every `*_DATABASE_URL` (these
-  live in the Secret, not the ConfigMap, because they embed the DB
-  password or another secret value). Real deployments should source these
-  from Vault / a cloud secret manager instead, per CLAUDE.md's security
-  baseline.
+  credentials, `SSO_ENCRYPTION_KEY`, Postgres credentials, and every
+  `*_DATABASE_URL` (these live in the Secret, not the ConfigMap, because
+  they embed the DB password or another secret value). Real deployments
+  should source these from Vault / a cloud secret manager instead, per
+  CLAUDE.md's security baseline.
 - `postgres.yaml` — backs every service except knowledge-service: a
   ConfigMap holding the same `init-db.sh` used by docker-compose (creates
-  the seven non-vector per-service databases), a PVC, Deployment, Service.
+  the eight non-vector per-service databases), a PVC, Deployment, Service.
 - `postgres-vector.yaml` — separate `pgvector/pgvector:pg16` instance
   dedicated to knowledge-service, mirroring docker-compose's split (kept
   separate so the pgvector requirement never touches the other services'

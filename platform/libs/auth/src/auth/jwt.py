@@ -12,12 +12,15 @@ from .config import (
 from .errors import InvalidTokenError
 
 
-def encode_access_token(tenant_id: uuid.UUID, employee_id: uuid.UUID) -> str:
+def encode_access_token(
+    tenant_id: uuid.UUID, employee_id: uuid.UUID, role: str = "employee"
+) -> str:
     return _encode(
         {
             "sub": str(employee_id),
             "tenant_id": str(tenant_id),
             "scope": "user",
+            "role": role,
         },
         ttl_seconds=ACCESS_TOKEN_TTL_SECONDS,
     )

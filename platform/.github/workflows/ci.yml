@@ -86,7 +86,8 @@ jobs:
             -c "CREATE DATABASE agent_registry" \
             -c "CREATE DATABASE memory_service" \
             -c "CREATE DATABASE analytics_service" \
-            -c "CREATE DATABASE skill_marketplace"
+            -c "CREATE DATABASE skill_marketplace" \
+            -c "CREATE DATABASE audit_service"
 
       - name: Migrate tenant-service against real Postgres
         working-directory: services/tenant-service
@@ -140,6 +141,12 @@ jobs:
         working-directory: services/skill-marketplace
         env:
           SKILL_MARKETPLACE_DATABASE_URL: postgresql+asyncpg://staffstream:staffstream@localhost:5432/skill_marketplace
+        run: uv run alembic upgrade head
+
+      - name: Migrate audit-service against real Postgres
+        working-directory: services/audit-service
+        env:
+          AUDIT_SERVICE_DATABASE_URL: postgresql+asyncpg://staffstream:staffstream@localhost:5432/audit_service
         run: uv run alembic upgrade head
 
   events:

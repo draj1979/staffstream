@@ -36,3 +36,8 @@ data:
   # this to the API Gateway's actual external domain (Slack/Google redirect
   # the employee's browser here directly, not through internal DNS).
   SKILL_MARKETPLACE_PUBLIC_BASE_URL: "http://skill-marketplace:8010"
+
+  # Same caveat as SKILL_MARKETPLACE_PUBLIC_BASE_URL above — must match
+  # each tenant's IdP-registered redirect URI exactly; a real deployment
+  # overrides this to an externally reachable domain.
+  AUTH_SERVICE_PUBLIC_BASE_URL: "http://auth-service:8003"

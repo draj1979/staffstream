@@ -46,3 +46,25 @@ class SkillUsageEvent(BaseModel):
     skill_name: str
     success: bool
     created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+
+
+class AuditEvent(BaseModel):
+    """One state-changing action, emitted by whichever service performed
+    it — Tenant Service (settings changes), Employee Service (CRUD, role
+    changes), Agent Registry (agent updates), Skill Marketplace
+    (enablement, OAuth connect/revoke), Auth Service (SSO config). Audit
+    Service is the only consumer, and never exposes an update/delete
+    route for what it stores — an audit trail that could be edited after
+    the fact isn't one.
+    """
+
+    tenant_id: uuid.UUID
+    # None only for actions with no individual human actor (there are
+    # none yet in this platform, but system-scoped bootstrap calls could
+    # plausibly need this later) — never omitted for a real employee action.
+    actor_employee_id: uuid.UUID | None = None
+    action: str  # e.g. "employee.updated", "skill.enablement_changed"
+    target_type: str  # e.g. "employee", "tenant", "skill", "agent"
+    target_id: str | None = None
+    metadata: dict = Field(default_factory=dict)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))

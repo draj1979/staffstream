@@ -4,10 +4,15 @@ from urllib.parse import parse_qs, urlparse
 import httpx
 
 from auth import encode_access_token, encode_state_token
+from events import ROUTING_KEY_AUDIT, AuditEvent
 
 
 def headers(tenant_id: uuid.UUID, employee_id: uuid.UUID) -> dict:
-    token = encode_access_token(tenant_id, employee_id)
+    # admin role: these tests exercise the OAuth/connections flow, and the
+    # same principal also flips skill enablement on along the way (now
+    # admin-gated) — not testing RBAC scoping itself here, see
+    # test_skills_api.py for that.
+    token = encode_access_token(tenant_id, employee_id, role="admin")
     return {"Authorization": f"Bearer {token}"}
 
 
@@ -142,3 +147,29 @@ async def test_disconnect_removes_the_connection(client, http_handler):
 async def test_disconnect_when_not_connected_is_404(client):
     resp = await client.delete("/connections/slack", headers=headers(uuid.uuid4(), uuid.uuid4()))
     assert resp.status_code == 404
+
+
+async def test_connect_and_disconnect_publish_audit_events(client, http_handler, fake_publisher):
+    tenant_id, employee_id = uuid.uuid4(), uuid.uuid4()
+    h = headers(tenant_id, employee_id)
+    await client.put("/skills/slack/enablement", json={"enabled": True, "config": {}}, headers=h)
+    http_handler.handler = _slack_oauth_handler
+    state = encode_state_token(
+        {"tenant_id": str(tenant_id), "employee_id": str(employee_id), "skill_id": "slack"}
+    )
+    await client.get("/connections/slack/callback", params={"code": "c1", "state": state})
+    await fake_publisher.wait_for_publish()
+
+    await client.delete("/connections/slack", headers=h)
+
+    events = [
+        AuditEvent.model_validate_json(payload)
+        for routing_key, payload in fake_publisher.published
+        if routing_key == ROUTING_KEY_AUDIT
+    ]
+    actions = [e.action for e in events]
+    assert "skill.connected" in actions
+    assert "skill.disconnected" in actions
+    connected_event = next(e for e in events if e.action == "skill.connected")
+    assert connected_event.target_id == "slack"
+    assert connected_event.actor_employee_id == employee_id

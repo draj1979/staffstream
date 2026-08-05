@@ -1,6 +1,6 @@
 import uuid
 
-from events import ChatInteractionEvent, LLMUsageEvent, SkillUsageEvent
+from events import AuditEvent, ChatInteractionEvent, LLMUsageEvent, SkillUsageEvent
 
 
 def test_llm_usage_event_round_trips_through_json():
@@ -53,3 +53,23 @@ def test_skill_usage_event_round_trips():
     )
     parsed = SkillUsageEvent.model_validate_json(event.model_dump_json())
     assert parsed == event
+
+
+def test_audit_event_round_trips():
+    event = AuditEvent(
+        tenant_id=uuid.uuid4(),
+        actor_employee_id=uuid.uuid4(),
+        action="employee.role_changed",
+        target_type="employee",
+        target_id=str(uuid.uuid4()),
+        metadata={"old_roles": ["employee"], "new_roles": ["manager"]},
+    )
+    parsed = AuditEvent.model_validate_json(event.model_dump_json())
+    assert parsed == event
+
+
+def test_audit_event_actor_and_metadata_default():
+    event = AuditEvent(tenant_id=uuid.uuid4(), action="tenant.updated", target_type="tenant")
+    assert event.actor_employee_id is None
+    assert event.metadata == {}
+    assert event.target_id is None

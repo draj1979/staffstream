@@ -46,5 +46,10 @@ class Settings(BaseSettings):
         default="not-set-configure-GOOGLE_CLIENT_SECRET", alias="GOOGLE_CLIENT_SECRET"
     )
 
+    # Shared infra, deliberately unprefixed (alias bypasses env_prefix) —
+    # same broker every service that publishes/consumes analytics/audit
+    # events would use.
+    rabbitmq_url: str = Field(default="amqp://guest:guest@localhost:5672/", alias="RABBITMQ_URL")
+
 
 settings = Settings()
