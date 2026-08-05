@@ -12,7 +12,7 @@ and integrations — is the actual product.
 
 ## Build phase (update this as phases complete)
 
-Current phase: **9 — SSO (Google Workspace, Auth0), RBAC/ABAC, audit logging**
+Current phase: **10 — Remaining connectors, multi-provider LLM Gateway, full-scale multi-tenancy (complete)**
 
 Do not implement components outside the current phase unless explicitly asked.
 Phases:

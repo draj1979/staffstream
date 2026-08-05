@@ -1445,14 +1445,10 @@ dependencies = [
     { name = "auth" },
     { name = "events" },
     { name = "fastapi" },
+    { name = "httpx" },
     { name = "pydantic" },
     { name = "pydantic-settings" },
     { name = "uvicorn", extra = ["standard"] },
-]
-
-[package.dev-dependencies]
-dev = [
-    { name = "httpx" },
 ]
 
 [package.metadata]
@@ -1461,13 +1457,14 @@ requires-dist = [
     { name = "auth", editable = "libs/auth" },
     { name = "events", editable = "libs/events" },
     { name = "fastapi", specifier = ">=0.115" },
+    { name = "httpx", specifier = ">=0.27" },
     { name = "pydantic", specifier = ">=2.9" },
     { name = "pydantic-settings", specifier = ">=2.6" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.32" },
 ]
 
 [package.metadata.requires-dev]
-dev = [{ name = "httpx", specifier = ">=0.27" }]
+dev = []
 
 [[package]]
 name = "lxml"

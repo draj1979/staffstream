@@ -20,11 +20,13 @@ def fake_agent_registry(monkeypatch):
     auto-created agents keyed by employee_id, for assertions."""
     created: dict[str, dict] = {}
 
-    async def fake_create_default_agent(tenant_id, *, employee_id):
+    async def fake_create_default_agent(tenant_id, *, employee_id, provider=None, model=None):
         agent = {
             "agent_id": str(uuid.uuid4()),
             "tenant_id": str(tenant_id),
             "employee_id": str(employee_id),
+            "provider": provider or "claude",
+            "model": model or "claude-sonnet-5",
         }
         created[str(employee_id)] = agent
         return agent

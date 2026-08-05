@@ -10,21 +10,21 @@ conventions.
 
 ## Current phase
 
-**Phase 9 — SSO (Google Workspace, Auth0), RBAC/ABAC, and platform-wide
-audit logging.**
+**Phase 10 — Remaining connectors, multi-provider LLM Gateway, and
+full-scale multi-tenancy (complete).**
 
 ## Stack
 
 - Backend APIs: FastAPI (Python 3.12), dependency/task management via [uv](https://docs.astral.sh/uv/)
 - DB: PostgreSQL (one logical database per service) — Cache: Redis
 - Migrations: Alembic — CI: GitHub Actions
-- Auth: argon2 password hashing, HS256 JWT access tokens (embed a `role` claim), opaque hashed refresh tokens
+- Auth: argon2 password hashing (off the event loop via `asyncio.to_thread`, see [Local development](#local-development)), HS256 JWT access tokens (embed a `role` claim), opaque hashed refresh tokens
 - SSO: OIDC (Google Workspace, Auth0) mapped onto the existing employee_id/tenant_id model — no parallel identity system
-- LLM: Anthropic Claude via the official SDK, behind a provider-abstraction interface, with tool-calling
+- LLM: Claude, GPT, Gemini, Mistral, DeepSeek, and Llama (via Groq) behind one provider-abstraction interface, with tool-calling and per-tenant/agent model selection
 - Embeddings: Voyage AI (`voyage-3-lite`, 512-dim) — Vector DB: pgvector
-- Containers: one Dockerfile per service — Orchestration: Kubernetes (single namespace)
+- Containers: one Dockerfile per service — Orchestration: Kubernetes (single namespace, HPA on every service)
 - Events: RabbitMQ (topic exchange) — LLM usage / chat interaction / skill usage / audit events
-- Connectors: Slack (OAuth v2 user token), Google Calendar (OAuth2 + refresh) — tokens encrypted at rest (Fernet)
+- Connectors: Slack, Google Calendar, Salesforce, HubSpot, Jira, GitHub, Microsoft Teams, Microsoft 365, ServiceNow, SAP, Oracle, WhatsApp — tokens encrypted at rest (Fernet)
 
 ## Tenant isolation
 
@@ -98,15 +98,45 @@ this is a synchronous multi-service write with no saga/outbox — a failure
 here surfaces as a 502 rather than silently losing the agent; a real fix
 needs the message queue mentioned in the tech stack but not built yet.
 
+Phase 10 adds an `Agent.provider` column (default `"claude"`) alongside the
+existing `model` field, so the LLM Gateway's provider name and model name
+travel together on the agent, not just the model. Employee Service reads a
+tenant's default provider/model off `Tenant.llm_config` (a widened
+`GET /tenants/{id}` now also accepts a system-scoped token, not just a user
+one) at agent-creation time and passes them through — falling back silently
+to Agent Registry's own hardcoded default if the tenant has none set or
+Tenant Service is unreachable, rather than blocking employee creation over it.
+
 ## LLM Gateway
 
 `services/llm-gateway` is a thin, authenticated `POST /generate` in front of
 an internal `Provider` interface
 ([provider.py](services/llm-gateway/src/llm_gateway/provider.py)) and an
-`LLMGateway` registry that dispatches by provider name. Only `"claude"` is
-registered (via the official Anthropic SDK) — Phase 10 registers GPT,
-Gemini, etc. as more `Provider` implementations, with no changes needed to
-the gateway or its callers.
+`LLMGateway` registry that dispatches by provider name.
+
+Phase 10 registers six providers: `"claude"` (the official Anthropic SDK,
+its own bespoke `Provider`) plus `"openai"`, `"gemini"`, `"mistral"`,
+`"deepseek"`, and `"llama"` — all five of the latter share one
+[`OpenAICompatibleProvider`](services/llm-gateway/src/llm_gateway/providers/openai_compatible.py)
+implementation (raw `httpx`, OpenAI's Chat Completions wire format),
+parameterized by `base_url`/`api_key`, since GPT natively speaks that format
+and Mistral/DeepSeek/Groq(-hosted Llama)/Google(Gemini, via its documented
+OpenAI-compatibility endpoint) all support an equivalent-enough one. That
+avoided writing five near-duplicate provider classes and four extra SDK
+dependencies. Per-tenant/agent model selection (see Agent Registry above)
+picks which of the six a given chat turn uses; `pricing.py` has cost-per-token
+entries for all six providers' models, feeding the same Phase 7 Analytics
+cost pipeline regardless of which provider actually served the request.
+
+**Known limitation:** OpenClaw Runtime's tool-calling loop (Phase 8) builds
+Anthropic-shaped message content blocks (`tool_use`/`tool_result`), so a
+*full* multi-turn tool conversation only round-trips correctly with the
+Claude provider today. Every provider can receive tool definitions and
+return `tool_calls` for one turn — only *continuing* that conversation
+across turns needs a translation layer this phase didn't build. Documented
+here and in
+[`openai_compatible.py`](services/llm-gateway/src/llm_gateway/providers/openai_compatible.py)'s
+docstring rather than silently shipped as if it worked.
 
 Phase 8 adds tool-calling to the request/response contract: `LLMRequest`
 takes an optional `tools` list (Anthropic's name/description/input_schema
@@ -114,7 +144,7 @@ shape), and `LLMResponse.tool_calls` carries back any `tool_use` blocks the
 model produced (`stop_reason: "tool_use"`), alongside the usual text
 `content` — see [models.py](services/llm-gateway/src/llm_gateway/models.py).
 The gateway itself doesn't execute tools; it just passes the tool
-definitions through to Anthropic and structures the response. OpenClaw
+definitions through to the provider and structures the response. OpenClaw
 Runtime is what actually runs a tool and feeds the result back.
 
 ## OpenClaw Runtime
@@ -338,6 +368,38 @@ access/system tokens) carrying `tenant_id`/`employee_id`/`skill_id`, and
 `/callback` trusts only what it can verify out of that token — never
 anything from the request's own query string.
 
+### Phase 10 connectors
+
+Ten more skills, same `Connector` interface and same three-gate
+authorization path above — no new pattern per connector, per CLAUDE.md:
+
+- **Salesforce, HubSpot, Jira, GitHub** — one fixed global OAuth endpoint
+  each, just like Slack/Google Calendar. Jira and Salesforce hand back
+  extra data during token exchange (a `cloud_id` / `instance_url`) that
+  every later API call needs — carried in `TokenSet.extra` and persisted
+  on a new `EmployeeConnection.connection_metadata` column, then handed
+  back to `invoke()` as `extra` on every call.
+- **Microsoft Teams, Microsoft 365** — share one Entra ID app registration
+  and Graph API; the common OAuth mechanics live in a private
+  `_microsoft.py` helper (not itself a registered connector) so the two
+  connectors don't duplicate ~80 lines of identical OAuth code.
+- **ServiceNow, SAP, Oracle** — these don't have one fixed OAuth endpoint
+  at all; each tenant's instance/landscape URL (`instance`, `sap_base_url`,
+  `oracle_base_url`) is a tenant-level fact, not a per-deployment one, so
+  it's read from `TenantSkillEnablement.config` — the same table Phase 8
+  already introduced for per-tenant skill config — via a new
+  `tenant_config: dict` parameter threaded through `authorize_url`/
+  `exchange_code`/`refresh`. An admin sets it once via
+  `PUT /skills/{skill_id}/enablement`.
+- **WhatsApp** — Meta/WhatsApp Business Platform OAuth; needs a tenant-level
+  `phone_number_id` (also from `tenant_config`) to know which WABA number
+  to send from.
+
+Both extension points (`tenant_config` and `TokenSet.extra`/`invoke`'s
+`extra`) are additive, optional parameters on the existing `Connector` ABC
+— Slack and Google Calendar's implementations didn't change behavior, only
+their signatures widened to accept (and ignore) the new params.
+
 ## RBAC & ABAC
 
 Three fixed roles, ranked `admin > manager > employee`
@@ -456,6 +518,27 @@ connectivity; stateless ones just confirm the process is up) — so k8s
 stops routing traffic to a pod that can't actually serve, without
 restarting a pod that just needs its dependency to come back.
 
+### Scaling (Phase 10)
+
+Every one of the twelve services now has a `HorizontalPodAutoscaler`
+(CPU-based, `autoscaling/v2`) alongside its Deployment — none existed
+before this phase. `minReplicas` matches each Deployment's static
+`replicas:`; `maxReplicas` and CPU target vary by how central the service
+is to the request hot path (2-8 replicas, 65-75% CPU target — see
+[docs/phase10-load-test.md](docs/phase10-load-test.md) for the full table
+and reasoning per service).
+
+`libs/tenancy`'s `make_engine()` sizes each service's Postgres connection
+pool (`pool_size=10`/`max_overflow=15` per pod, Postgres URLs only —
+sqlite in tests is untouched) — bumped up from SQLAlchemy's single-instance
+defaults after a load test showed them queuing under concurrent multi-tenant
+traffic. The shared Postgres instance's `max_connections` (`infra/k8s/postgres.yaml`)
+is bumped to match. `scripts/load_test.py` drives many concurrent tenants
+through the real API Gateway and asserts tenant isolation and per-tenant
+rate limiting both hold under that concurrency — see
+[docs/phase10-load-test.md](docs/phase10-load-test.md) for results and how
+to reproduce it locally.
+
 ## Local development
 
 ```bash
@@ -494,14 +577,18 @@ any other local Postgres instance; Knowledge Service's separate
 Postgres+pgvector instance is on **5434** (a dedicated container, not a
 retrofit of the shared one — see `docker-compose.yml`'s `postgres-vector`
 service). `JWT_SECRET_KEY` must be identical across every service — see
-`.env.example`. `ANTHROPIC_API_KEY` / `VOYAGE_API_KEY` are only needed to
-actually call Claude / Voyage; without them the services still start and
-route correctly, calls just fail with a normal auth error from the
-provider. Same story for `SLACK_CLIENT_ID`/`SLACK_CLIENT_SECRET` and
-`GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET` — Skill Marketplace starts fine
-without a real Slack app or Google Cloud OAuth client registered, an
-OAuth authorize/exchange just fails with a normal error from the
-provider until they're set. `OAUTH_ENCRYPTION_KEY` / `SSO_ENCRYPTION_KEY`
+`.env.example`. `ANTHROPIC_API_KEY` / `VOYAGE_API_KEY` — and, as of Phase
+10, `OPENAI_API_KEY` / `GEMINI_API_KEY` / `MISTRAL_API_KEY` /
+`DEEPSEEK_API_KEY` / `LLAMA_API_KEY` — are only needed to actually call
+that provider; without them the services still start and route correctly,
+calls just fail with a normal auth error from the provider. Same story for
+`SLACK_CLIENT_ID`/`SLACK_CLIENT_SECRET`, `GOOGLE_CLIENT_ID`/
+`GOOGLE_CLIENT_SECRET`, and the ten Phase 10 connector client id/secret
+pairs (`SALESFORCE_*`, `HUBSPOT_*`, `JIRA_*`, `GITHUB_*`, `MICROSOFT_*`,
+`SERVICENOW_*`, `SAP_*`, `ORACLE_*`, `WHATSAPP_*`) — Skill Marketplace
+starts fine without any of them registered, an OAuth authorize/exchange
+just fails with a normal error from the provider until they're set.
+`OAUTH_ENCRYPTION_KEY` / `SSO_ENCRYPTION_KEY`
 have working local-dev defaults but should each be regenerated per real
 environment (see `.env.example`'s comment for the one-liner). SSO itself
 needs no service-level credentials at all to start — each tenant supplies
@@ -520,19 +607,20 @@ services/
   employee-service/    Employee CRUD: department, designation, manager, roles, agent_id — RBAC + department ABAC
   auth-service/        Signup/login/refresh/logout (password) + SSO (Google Workspace, Auth0) — the only service touching credentials
   agent-registry/      One agent profile per employee: model, prompt, temperature, memory namespace, ...
-  llm-gateway/          Provider abstraction over LLMs; Claude only for now — emits LLM usage events
+  llm-gateway/          Provider abstraction over LLMs: Claude, GPT, Gemini, Mistral, DeepSeek, Llama — emits LLM usage events
   openclaw-runtime/     Stateless: POST /chat — loads agent + memory + knowledge + skills, tool-calling loop, emits chat/skill events
   memory-service/       Per-employee memory: conversation, long-term, preferences, learned facts
   knowledge-service/    Company/department/personal knowledge: PDF/DOCX -> chunks -> pgvector
   api-gateway/          Front door: per-tenant rate limiting, size limits, sanitized errors, reverse proxy
   analytics-service/    Usage/tokens/cost/health from queued events — Admin/Finance/IT dashboards
-  skill-marketplace/    Skill registry, per-tenant enablement, per-employee OAuth (Slack, Google Calendar)
+  skill-marketplace/    Skill registry, per-tenant enablement, per-employee OAuth (12 connectors)
   audit-service/        Immutable, tenant-scoped audit trail of every state-changing action
 tests/                 root-level smoke tests
 docs/                  architecture and design docs
+scripts/               load_test.py — multi-tenant concurrency + rate-limit load test (Phase 10)
 infra/
   docker/               docker-compose init scripts
-  k8s/                  Deployment/Service/ConfigMap/Secret manifests, single namespace
+  k8s/                  Deployment/Service/HorizontalPodAutoscaler/ConfigMap/Secret manifests, single namespace
 ```
 
 Every service directory also has its own `Dockerfile`.

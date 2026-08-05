@@ -76,6 +76,11 @@ class EmployeeConnection(TenantScopedBase):
     # Human-readable identity at the provider (Slack user id, Google
     # account email, ...) — display only, never used for authorization.
     external_account: Mapped[str | None] = mapped_column(String(255))
+    # Whatever else the OAuth exchange handed back that a connector needs
+    # on every later call — Salesforce's instance_url, Jira's cloudId,
+    # ... (see connectors/base.py's TokenSet.extra). Empty for connectors
+    # that don't need any (Slack, Google Calendar).
+    connection_metadata: Mapped[dict] = mapped_column(JSONVariant, nullable=False, default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=_utcnow, onupdate=_utcnow

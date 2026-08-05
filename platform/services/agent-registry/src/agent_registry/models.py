@@ -25,6 +25,12 @@ class Agent(TenantScopedBase):
     employee_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False, index=True)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     personality: Mapped[str | None] = mapped_column(Text)
+    # Which LLM Gateway provider this agent's calls go through — Phase 10
+    # adds five more providers alongside Claude (see llm-gateway). Set
+    # from the tenant's own llm_config default at agent-creation time
+    # (see employee_service.agent_registry_client), overridable per agent
+    # after that.
+    provider: Mapped[str] = mapped_column(String(50), nullable=False, default="claude")
     model: Mapped[str] = mapped_column(String(100), nullable=False, default="claude-sonnet-5")
     temperature: Mapped[float] = mapped_column(Float, nullable=False, default=1.0)
     prompt: Mapped[str] = mapped_column(Text, nullable=False, default="")

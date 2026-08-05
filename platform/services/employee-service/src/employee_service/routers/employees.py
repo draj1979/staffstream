@@ -11,6 +11,7 @@ from ..agent_registry_client import AgentRegistryError, create_default_agent
 from ..db import get_db
 from ..dependencies import get_publisher
 from ..schemas import EmployeeCreate, EmployeeOut, EmployeeUpdate
+from ..tenant_client import get_llm_defaults
 
 router = APIRouter(prefix="/employees", tags=["employees"])
 
@@ -122,8 +123,17 @@ async def create_employee(
     except crud.ManagerNotFoundError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
+    # Best-effort: a tenant without llm_config set (or an unreachable
+    # Tenant Service) just falls through to Agent Registry's own
+    # hardcoded default rather than blocking employee creation.
+    default_provider, default_model = await get_llm_defaults(principal.tenant_id)
     try:
-        agent = await create_default_agent(principal.tenant_id, employee_id=employee.employee_id)
+        agent = await create_default_agent(
+            principal.tenant_id,
+            employee_id=employee.employee_id,
+            provider=default_provider,
+            model=default_model,
+        )
     except AgentRegistryError as exc:
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=exc.detail) from exc
 

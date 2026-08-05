@@ -51,7 +51,7 @@ async def test_create_employee_with_system_token_bootstrap(client, fake_agent_re
 async def test_agent_registry_failure_surfaces_as_502(client, monkeypatch):
     from employee_service.agent_registry_client import AgentRegistryError
 
-    async def failing_create_default_agent(tenant_id, *, employee_id):
+    async def failing_create_default_agent(tenant_id, *, employee_id, provider=None, model=None):
         raise AgentRegistryError(500, "agent registry is down")
 
     monkeypatch.setattr(
@@ -80,6 +80,47 @@ async def test_create_employee_with_admin_token_works(client):
         headers=admin_headers(TENANT_A),
     )
     assert resp.status_code == 201
+
+
+async def test_create_employee_uses_tenants_llm_defaults_for_new_agent(
+    client, fake_agent_registry, monkeypatch
+):
+    """A tenant's own llm_config.default_provider/default_model (Phase 10)
+    should apply to every new employee's auto-created agent, not Agent
+    Registry's hardcoded claude/claude-sonnet-5."""
+
+    async def fake_get_llm_defaults(tenant_id):
+        return "openai", "gpt-4o"
+
+    monkeypatch.setattr(
+        "employee_service.routers.employees.get_llm_defaults", fake_get_llm_defaults
+    )
+
+    resp = await client.post(
+        "/employees", json={"email": "new-hire@acme.com"}, headers=system_headers(TENANT_A)
+    )
+    assert resp.status_code == 201
+    employee_id = resp.json()["employee_id"]
+    assert fake_agent_registry[employee_id]["provider"] == "openai"
+    assert fake_agent_registry[employee_id]["model"] == "gpt-4o"
+
+
+async def test_create_employee_falls_back_when_tenant_has_no_llm_config(
+    client, fake_agent_registry, monkeypatch
+):
+    async def fake_get_llm_defaults(tenant_id):
+        return None, None
+
+    monkeypatch.setattr(
+        "employee_service.routers.employees.get_llm_defaults", fake_get_llm_defaults
+    )
+
+    resp = await client.post(
+        "/employees", json={"email": "another-hire@acme.com"}, headers=system_headers(TENANT_A)
+    )
+    assert resp.status_code == 201
+    employee_id = resp.json()["employee_id"]
+    assert fake_agent_registry[employee_id]["provider"] == "claude"
 
 
 async def test_manager_can_only_create_employees_in_own_department(client):

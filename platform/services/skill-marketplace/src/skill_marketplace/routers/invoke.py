@@ -39,7 +39,8 @@ async def invoke_skill(
     connector = CONNECTOR_REGISTRY.get(skill_id)
     if connector is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Unknown skill")
-    if not await crud.is_enabled(db, skill_id):
+    enablement = await crud.get_enablement(db, skill_id)
+    if enablement is None or not enablement.enabled:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="This skill is not enabled for your organization",
@@ -59,7 +60,9 @@ async def invoke_skill(
     ):
         try:
             refreshed = await connector.refresh(
-                refresh_token=decrypt_token(connection.refresh_token_encrypted), http=http
+                refresh_token=decrypt_token(connection.refresh_token_encrypted),
+                http=http,
+                tenant_config=enablement.config,
             )
         except ConnectorError as exc:
             raise HTTPException(
@@ -70,7 +73,11 @@ async def invoke_skill(
     access_token = decrypt_token(connection.access_token_encrypted)
     try:
         output = await connector.invoke(
-            tool_name=data.tool_name, tool_input=data.input, access_token=access_token, http=http
+            tool_name=data.tool_name,
+            tool_input=data.input,
+            access_token=access_token,
+            http=http,
+            extra=connection.connection_metadata,
         )
     except ConnectorError as exc:
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc)) from exc

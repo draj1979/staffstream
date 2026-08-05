@@ -35,6 +35,14 @@ spec:
       containers:
         - name: postgres-vector
           image: pgvector/pgvector:pg16
+          # Phase 10: only knowledge-service uses this instance, and its
+          # HPA (infra/k8s/services/knowledge-service.yaml) tops out at 4
+          # replicas x (pool_size=10 + max_overflow=15) = 100 — default
+          # max_connections (100) leaves no headroom at all once
+          # pool_pre_ping's own housekeeping connections are counted, so
+          # this gets the same treatment as postgres.yaml, just a smaller
+          # number since it's one service, not eight.
+          args: ["-c", "max_connections=150"]
           ports:
             - containerPort: 5432
           env:

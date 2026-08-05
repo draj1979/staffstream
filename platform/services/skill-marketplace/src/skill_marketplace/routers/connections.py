@@ -52,7 +52,8 @@ async def authorize(
     connector = CONNECTOR_REGISTRY.get(skill_id)
     if connector is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Unknown skill")
-    if not await crud.is_enabled(db, skill_id):
+    enablement = await crud.get_enablement(db, skill_id)
+    if enablement is None or not enablement.enabled:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="This skill is not enabled for your organization",
@@ -68,7 +69,9 @@ async def authorize(
             "skill_id": skill_id,
         }
     )
-    url = connector.authorize_url(state=state, redirect_uri=_redirect_uri(skill_id))
+    url = connector.authorize_url(
+        state=state, redirect_uri=_redirect_uri(skill_id), tenant_config=enablement.config
+    )
     return RedirectResponse(url, status_code=status.HTTP_307_TEMPORARY_REDIRECT)
 
 
@@ -111,9 +114,14 @@ async def callback(
 
     token_ctx = set_current_tenant_id(tenant_id)
     try:
+        enablement = await crud.get_enablement(db, skill_id)
+        tenant_config = enablement.config if enablement is not None else {}
         try:
             tokens = await connector.exchange_code(
-                code=code, redirect_uri=_redirect_uri(skill_id), http=http
+                code=code,
+                redirect_uri=_redirect_uri(skill_id),
+                http=http,
+                tenant_config=tenant_config,
             )
         except ConnectorError as exc:
             raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc)) from exc

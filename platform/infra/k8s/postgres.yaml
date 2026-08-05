@@ -51,6 +51,21 @@ spec:
       containers:
         - name: postgres
           image: postgres:16-alpine
+          # Phase 10: default max_connections (100) was sized for phase
+          # 6's single-replica-per-service baseline. This instance backs
+          # 8 services (see the initdb loop above), each now pooling
+          # pool_size=10/max_overflow=15 per pod (libs/tenancy's
+          # make_engine) and each independently scaled by its own HPA
+          # (infra/k8s/services/*.yaml) up to 3-6 replicas. Worst case if
+          # every service's HPA maxed out at once is well north of 300,
+          # but services don't all peak together in practice — 300 is
+          # deliberately not the theoretical worst case, it's a budget
+          # sized against realistic multi-tenant load (see
+          # docs/phase10-load-test.md). A real production deployment
+          # under sustained high tenant counts should sit PgBouncer in
+          # front of this rather than raising max_connections further —
+          # noted as a follow-up, not built this phase.
+          args: ["-c", "max_connections=300"]
           ports:
             - containerPort: 5432
           env:
@@ -77,8 +92,12 @@ spec:
             initialDelaySeconds: 15
             periodSeconds: 20
           resources:
-            requests: {cpu: "100m", memory: "256Mi"}
-            limits: {cpu: "1", memory: "512Mi"}
+            # Bumped alongside max_connections above — each connection
+            # carries its own backend-process memory overhead, so more
+            # allowed connections needs more headroom than phase 6's
+            # single-service-per-replica baseline assumed.
+            requests: {cpu: "250m", memory: "512Mi"}
+            limits: {cpu: "2", memory: "1Gi"}
       volumes:
         - name: data
           persistentVolumeClaim: {claimName: postgres-data}

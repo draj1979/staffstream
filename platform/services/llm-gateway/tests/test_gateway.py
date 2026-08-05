@@ -44,13 +44,35 @@ async def test_gateway_rejects_unknown_provider():
         await gateway.complete("nonexistent", _request())
 
 
-async def test_build_default_gateway_registers_claude_only():
+def _default_gateway_kwargs() -> dict:
+    return {
+        "anthropic_api_key": "test-key",
+        "openai_api_key": "test-key",
+        "openai_base_url": "https://api.openai.com/v1",
+        "gemini_api_key": "test-key",
+        "gemini_base_url": "https://generativelanguage.googleapis.com/v1beta/openai",
+        "mistral_api_key": "test-key",
+        "mistral_base_url": "https://api.mistral.ai/v1",
+        "deepseek_api_key": "test-key",
+        "deepseek_base_url": "https://api.deepseek.com",
+        "llama_api_key": "test-key",
+        "llama_base_url": "https://api.groq.com/openai/v1",
+    }
+
+
+async def test_build_default_gateway_registers_all_six_providers():
     from llm_gateway.gateway import build_default_gateway
 
-    gateway = build_default_gateway(anthropic_api_key="test-key")
+    gateway = build_default_gateway(**_default_gateway_kwargs())
     with pytest.raises(UnknownProviderError):
-        await gateway.complete("gpt", _request())
-    # "claude" is registered — confirmed indirectly: calling it doesn't
-    # raise UnknownProviderError (a real call would need network/API key,
-    # which this test deliberately doesn't exercise).
-    assert "claude" in gateway._providers
+        await gateway.complete("nonexistent", _request())
+    # Confirmed indirectly: each is registered (a real call would need
+    # network/API keys, which this test deliberately doesn't exercise).
+    assert set(gateway._providers) == {
+        "claude",
+        "openai",
+        "gemini",
+        "mistral",
+        "deepseek",
+        "llama",
+    }

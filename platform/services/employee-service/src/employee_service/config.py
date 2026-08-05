@@ -11,6 +11,7 @@ class Settings(BaseSettings):
         "postgresql+asyncpg://staffstream:staffstream@localhost:5432/employee_service"
     )
     agent_registry_url: str = "http://localhost:8004"
+    tenant_service_url: str = "http://localhost:8001"
 
     # Shared infra, deliberately unprefixed (alias bypasses env_prefix) —
     # same broker every service that publishes/consumes analytics/audit

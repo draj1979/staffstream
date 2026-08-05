@@ -56,3 +56,33 @@ spec:
   ports:
     - port: 80
       targetPort: 8000
+---
+# New in Phase 10 (see the other services' HPAs for the general
+# rationale). minReplicas=2 matches this Deployment's existing static
+# replicas above — it's the one service that already ran >1 replica
+# pre-HPA (rate limiting is Redis-backed, safe for that from day one),
+# and the front door for every tenant's traffic, so it gets the lowest
+# CPU target (scales out sooner) and gets to keep the highest ceiling
+# alongside the chat hot path.
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: api-gateway
+  namespace: staffstream
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: api-gateway
+  minReplicas: 2
+  maxReplicas: 8
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 65
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 300

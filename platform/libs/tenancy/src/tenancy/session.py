@@ -67,6 +67,42 @@ def _stamp_or_validate_tenant_id(mapper, connection, target: TenantScopedBase) -
 
 
 def make_engine(database_url: str, **kwargs) -> AsyncEngine:
+    """Every service's db.py calls this with just a URL, so the pool
+    tuning that matters under multi-tenant load lives here once, not
+    copy-pasted into 9 files.
+
+    SQLAlchemy's own defaults (pool_size=5, max_overflow=10 -> 15
+    connections per engine) were sized for a single app instance, not a
+    k8s Deployment that HPA can scale out under load. A load test against
+    the local stack (scripts/load_test.py) showed signup latency
+    (a 3-hop chain through auth-service -> employee-service ->
+    agent-registry, each with its own pool) growing from ~0.6s p50 to
+    ~1.5s p50 and 2.3s p95 once concurrency crossed ~30 in-flight
+    requests per pod — connections queuing behind the 15-connection cap,
+    not CPU or the database itself.
+
+    Bumped to pool_size=10/max_overflow=15 (25 per pod) as a better
+    per-pod budget for that same scenario, still deliberately modest
+    because it's multiplied by both HPA replica count *and* how many of
+    the 8 services share the one Postgres instance (see
+    infra/k8s/postgres.yaml's max_connections, sized with this budget in
+    mind). pool_recycle avoids handing out a connection Postgres or a
+    cloud LB has already dropped from under a long-lived pool; that
+    matters more once pods live for days under HPA rather than being
+    restarted often in dev. Callers can still override any of these via
+    kwargs for a service with different needs (e.g. a lighter pool for a
+    low-traffic service, or a bigger one for a proxy-heavy one).
+
+    sqlite (used by every service's test suite, an in-memory StaticPool)
+    doesn't accept pool_size/max_overflow/pool_timeout at all, so these
+    are only applied for real (Postgres) URLs — tests get sqlite's own
+    defaults untouched.
+    """
+    if not database_url.startswith("sqlite"):
+        kwargs.setdefault("pool_size", 10)
+        kwargs.setdefault("max_overflow", 15)
+        kwargs.setdefault("pool_timeout", 30)
+        kwargs.setdefault("pool_recycle", 1800)
     return create_async_engine(database_url, pool_pre_ping=True, **kwargs)
 
 

@@ -41,10 +41,24 @@ async def test_create_agent_with_system_token_applies_defaults(client):
     assert body["tenant_id"] == str(TENANT_A)
     assert body["employee_id"] == str(employee_id)
     assert body["name"] == "Personal Assistant"
+    assert body["provider"] == "claude"
     assert body["model"] == "claude-sonnet-5"
     assert body["temperature"] == 1.0
     assert body["memory_namespace"] == f"{TENANT_A}:{employee_id}"
     assert body["knowledge_sources"] == []
+
+
+async def test_create_agent_with_explicit_provider(client):
+    employee_id = uuid.uuid4()
+    resp = await client.post(
+        "/agents",
+        json={"employee_id": str(employee_id), "provider": "openai", "model": "gpt-4o"},
+        headers=system_headers(TENANT_A),
+    )
+    assert resp.status_code == 201
+    body = resp.json()
+    assert body["provider"] == "openai"
+    assert body["model"] == "gpt-4o"
 
 
 async def test_create_agent_with_user_token_also_works(client):

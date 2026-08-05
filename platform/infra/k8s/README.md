@@ -45,25 +45,36 @@ real registry, and pins a real tag instead of `latest`.
 - `configmap.yaml` — non-secret config: inter-service URLs (k8s DNS names,
   e.g. `http://tenant-service:8001`), `REDIS_URL`, and `RABBITMQ_URL`.
 - `secret.example.yaml` — template for `JWT_SECRET_KEY`, `ANTHROPIC_API_KEY`,
-  `VOYAGE_API_KEY`, `OAUTH_ENCRYPTION_KEY` + Slack/Google OAuth app
-  credentials, `SSO_ENCRYPTION_KEY`, Postgres credentials, and every
-  `*_DATABASE_URL` (these live in the Secret, not the ConfigMap, because
-  they embed the DB password or another secret value). Real deployments
-  should source these from Vault / a cloud secret manager instead, per
-  CLAUDE.md's security baseline.
+  `VOYAGE_API_KEY`, the five Phase 10 LLM provider keys, `OAUTH_ENCRYPTION_KEY`
+  + all twelve connectors' OAuth app credentials, `SSO_ENCRYPTION_KEY`,
+  Postgres credentials, and every `*_DATABASE_URL` (these live in the
+  Secret, not the ConfigMap, because they embed the DB password or another
+  secret value). Real deployments should source these from Vault / a cloud
+  secret manager instead, per CLAUDE.md's security baseline.
 - `postgres.yaml` — backs every service except knowledge-service: a
   ConfigMap holding the same `init-db.sh` used by docker-compose (creates
   the eight non-vector per-service databases), a PVC, Deployment, Service.
+  `max_connections` is bumped (Phase 10) to match the per-pod connection
+  pool budget (`libs/tenancy`'s `make_engine`) multiplied out across each
+  service's `HorizontalPodAutoscaler` — see `services/*.yaml` below and
+  [../../docs/phase10-load-test.md](../../docs/phase10-load-test.md).
 - `postgres-vector.yaml` — separate `pgvector/pgvector:pg16` instance
   dedicated to knowledge-service, mirroring docker-compose's split (kept
   separate so the pgvector requirement never touches the other services'
-  database or its image/collation).
+  database or its image/collation). `max_connections` bumped the same way,
+  just against knowledge-service's own HPA ceiling.
 - `redis.yaml` — backs the API Gateway's per-tenant rate limiter.
 - `rabbitmq.yaml` — event bus: LLM Gateway and OpenClaw Runtime publish
   usage/interaction/skill events here, Analytics Service consumes them.
-- `services/*.yaml` — one Deployment + Service per backend service, each
+- `services/*.yaml` — one Deployment + Service + `HorizontalPodAutoscaler`
+  (Phase 10 — none existed before) per backend service. Each Deployment is
   wired with `livenessProbe` on `/healthz` and `readinessProbe` on
   `/readyz` (see each service's own `/readyz` — DB-backed services check
   real DB connectivity; stateless ones just confirm the process is up).
   `api-gateway`'s Service is the one `type: LoadBalancer` — the intended
-  external entry point; every other Service is ClusterIP-only.
+  external entry point; every other Service is ClusterIP-only. Each HPA is
+  CPU-based (`autoscaling/v2`), `minReplicas` matching the Deployment's
+  static `replicas:` and `maxReplicas`/CPU target varying by how central
+  the service is to the request hot path — see
+  [../../docs/phase10-load-test.md](../../docs/phase10-load-test.md) for
+  the full table and the load test behind the tuning.

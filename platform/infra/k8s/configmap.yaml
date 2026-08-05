@@ -11,6 +11,10 @@ data:
   RABBITMQ_URL: "amqp://guest:guest@rabbitmq:5672/"
 
   EMPLOYEE_SERVICE_AGENT_REGISTRY_URL: "http://agent-registry:8004"
+  # Phase 10 — read at employee-creation time for the tenant's default LLM
+  # provider/model; falls back to Agent Registry's own default if
+  # unreachable, so this is never a hard dependency.
+  EMPLOYEE_SERVICE_TENANT_SERVICE_URL: "http://tenant-service:8001"
   AUTH_SERVICE_EMPLOYEE_SERVICE_URL: "http://employee-service:8002"
 
   OPENCLAW_RUNTIME_AGENT_REGISTRY_URL: "http://agent-registry:8004"

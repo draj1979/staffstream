@@ -15,6 +15,7 @@ def _agent(**overrides) -> dict:
         "employee_id": str(uuid.uuid4()),
         "name": "Personal Assistant",
         "personality": None,
+        "provider": "claude",
         "model": "claude-sonnet-5",
         "temperature": 0.7,
         "prompt": "You are a helpful assistant.",
@@ -60,7 +61,15 @@ async def test_chat_uses_agent_config_and_returns_reply(client, monkeypatch):
         return agent
 
     async def fake_generate(
-        *, bearer_token, model, system, messages, temperature, agent_id=None, tools=None
+        *,
+        bearer_token,
+        model,
+        system,
+        messages,
+        temperature,
+        agent_id=None,
+        tools=None,
+        provider=None,
     ):
         captured.update(
             bearer_token=bearer_token, model=model, system=system,
@@ -84,6 +93,33 @@ async def test_chat_uses_agent_config_and_returns_reply(client, monkeypatch):
     assert captured["system"] == "You are a helpful assistant."
     assert captured["messages"] == [{"role": "user", "content": "what's the weather?"}]
     assert captured["bearer_token"] == headers["Authorization"]
+
+
+async def test_chat_forwards_agents_provider_to_llm_gateway(client, monkeypatch):
+    headers, tenant_id, employee_id = auth_headers()
+    agent = _agent(
+        tenant_id=str(tenant_id),
+        employee_id=str(employee_id),
+        provider="openai",
+        model="gpt-4o",
+    )
+
+    async def fake_get_agent(emp_id, *, bearer_token):
+        return agent
+
+    captured = {}
+
+    async def fake_generate(**kwargs):
+        captured.update(kwargs)
+        return _llm_response(model="gpt-4o")
+
+    monkeypatch.setattr(runtime_module, "get_agent_for_employee", fake_get_agent)
+    monkeypatch.setattr(runtime_module, "generate", fake_generate)
+
+    resp = await client.post("/chat", json={"message": "hi"}, headers=headers)
+    assert resp.status_code == 200
+    assert captured["provider"] == "openai"
+    assert captured["model"] == "gpt-4o"
 
 
 async def test_personality_is_folded_into_system_prompt(client, monkeypatch):

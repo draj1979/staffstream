@@ -1,4 +1,4 @@
-.PHONY: up down logs lint test migrate \
+.PHONY: up down logs lint test migrate load-test \
 	run-tenant-service run-employee-service run-auth-service run-agent-registry run-llm-gateway \
 	run-openclaw-runtime run-memory-service run-knowledge-service run-api-gateway run-analytics-service \
 	run-skill-marketplace run-audit-service \
@@ -21,6 +21,12 @@ lint:
 
 test:
 	uv run pytest
+
+# Phase 10 — needs tenant-service, employee-service, auth-service,
+# agent-registry, and api-gateway already running (make run-* in separate
+# terminals, or see docs/phase10-load-test.md). See --help for options.
+load-test:
+	uv run python scripts/load_test.py
 
 migrate:
 	cd services/tenant-service && uv run alembic upgrade head

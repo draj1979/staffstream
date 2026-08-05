@@ -62,7 +62,9 @@ class GoogleCalendarConnector(Connector):
             ),
         ]
 
-    def authorize_url(self, *, state: str, redirect_uri: str) -> str:
+    def authorize_url(
+        self, *, state: str, redirect_uri: str, tenant_config: dict | None = None
+    ) -> str:
         params = httpx.QueryParams(
             {
                 "client_id": settings.google_client_id,
@@ -77,7 +79,12 @@ class GoogleCalendarConnector(Connector):
         return f"{_AUTHORIZE_URL}?{params}"
 
     async def exchange_code(
-        self, *, code: str, redirect_uri: str, http: httpx.AsyncClient
+        self,
+        *,
+        code: str,
+        redirect_uri: str,
+        http: httpx.AsyncClient,
+        tenant_config: dict | None = None,
     ) -> TokenSet:
         resp = await http.post(
             _TOKEN_URL,
@@ -96,7 +103,9 @@ class GoogleCalendarConnector(Connector):
             )
         return await self._token_set_from_response(body, http=http)
 
-    async def refresh(self, *, refresh_token: str, http: httpx.AsyncClient) -> TokenSet:
+    async def refresh(
+        self, *, refresh_token: str, http: httpx.AsyncClient, tenant_config: dict | None = None
+    ) -> TokenSet:
         resp = await http.post(
             _TOKEN_URL,
             data={
@@ -141,7 +150,13 @@ class GoogleCalendarConnector(Connector):
         )
 
     async def invoke(
-        self, *, tool_name: str, tool_input: dict, access_token: str, http: httpx.AsyncClient
+        self,
+        *,
+        tool_name: str,
+        tool_input: dict,
+        access_token: str,
+        http: httpx.AsyncClient,
+        extra: dict | None = None,
     ) -> dict:
         headers = {"Authorization": f"Bearer {access_token}"}
 

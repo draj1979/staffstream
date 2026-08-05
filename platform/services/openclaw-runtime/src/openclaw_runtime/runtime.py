@@ -81,6 +81,7 @@ async def _run_tool_calling_loop(
             temperature=agent["temperature"],
             agent_id=context.agent_id,
             tools=tools or None,
+            provider=agent.get("provider"),
         )
         total_input_tokens += response["usage"]["input_tokens"]
         total_output_tokens += response["usage"]["output_tokens"]

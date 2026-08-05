@@ -9,6 +9,7 @@ dependencies = [
     "pydantic>=2.9",
     "pydantic-settings>=2.6",
     "anthropic>=0.40",
+    "httpx>=0.27",
     "auth",
     "events",
 ]
@@ -18,7 +19,7 @@ auth = { workspace = true }
 events = { workspace = true }
 
 [dependency-groups]
-dev = ["httpx>=0.27"]
+dev = []
 
 [build-system]
 requires = ["hatchling"]

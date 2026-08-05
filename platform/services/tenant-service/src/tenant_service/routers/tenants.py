@@ -18,8 +18,13 @@ router = APIRouter(prefix="/tenants", tags=["tenants"])
 system_auth = require_auth(allowed_scopes=("system",))
 # Reading a specific tenant requires a real employee of THAT tenant
 # (enforced below, since Tenant isn't itself tenant-scoped and so gets no
-# automatic filtering from the tenancy ORM layer).
+# automatic filtering from the tenancy ORM layer) — or a system-scoped
+# token for the one tenant it names, same bootstrap pattern as Employee
+# Service's own by-id/by-email routes. Employee Service's agent-creation
+# flow (Phase 10) is the current system-scoped caller, reading
+# llm_config to pick a new agent's default provider/model.
 user_auth = require_auth()
+bootstrap_auth = require_auth(allowed_scopes=("user", "system"))
 # Changing tenant settings is admin-only, on top of the same-tenant check.
 admin_auth = require_role(Role.ADMIN.value)
 
@@ -53,7 +58,7 @@ async def list_tenants(
 @router.get("/{tenant_id}", response_model=TenantOut)
 async def get_tenant(
     tenant_id: uuid.UUID,
-    principal: Principal = Depends(user_auth),
+    principal: Principal = Depends(bootstrap_auth),
     db: AsyncSession = Depends(get_db),
 ):
     _require_self_tenant(principal, tenant_id)

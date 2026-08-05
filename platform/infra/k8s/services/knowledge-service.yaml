@@ -48,3 +48,36 @@ spec:
   ports:
     - port: 8008
       targetPort: 8008
+---
+# New in Phase 10: none of these HPAs existed before this phase, despite
+# k8s manifests going in at phase 6 — HPA needs the CPU requests every
+# Deployment already sets (see above) to compute utilization, so it slots
+# in cleanly now. minReplicas matches this Deployment's static `replicas:`
+# above (once the HPA is applied, that field is only the starting point —
+# the HPA controller owns replica count from here on).
+# Retrieval read path is on the chat hot path; document upload/embedding is bursty but infrequent, so a lower ceiling than the chat-path services is enough.
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: knowledge-service
+  namespace: staffstream
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: knowledge-service
+  minReplicas: 1
+  maxReplicas: 4
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 75
+  behavior:
+    scaleDown:
+      # Don't thrash replicas down the moment load dips for a minute —
+      # multi-tenant traffic is bursty (different tenants' business
+      # hours), so a slow scale-down avoids flapping back up minutes later.
+      stabilizationWindowSeconds: 300

@@ -46,6 +46,42 @@ class Settings(BaseSettings):
         default="not-set-configure-GOOGLE_CLIENT_SECRET", alias="GOOGLE_CLIENT_SECRET"
     )
 
+    # Phase 10 — ten more connectors, same placeholder + unprefixed story
+    # as Slack/Google above: each app is registered once at the platform
+    # level (one Salesforce Connected App, one GitHub OAuth App, ...);
+    # per-tenant instance details that DO vary (ServiceNow's instance
+    # subdomain, SAP's/Oracle's tenant base URL) live in
+    # TenantSkillEnablement.config instead, set via the existing
+    # PUT /skills/{id}/enablement — not another env var per tenant.
+    salesforce_client_id: str = Field(default="not-set", alias="SALESFORCE_CLIENT_ID")
+    salesforce_client_secret: str = Field(default="not-set", alias="SALESFORCE_CLIENT_SECRET")
+
+    hubspot_client_id: str = Field(default="not-set", alias="HUBSPOT_CLIENT_ID")
+    hubspot_client_secret: str = Field(default="not-set", alias="HUBSPOT_CLIENT_SECRET")
+
+    jira_client_id: str = Field(default="not-set", alias="JIRA_CLIENT_ID")
+    jira_client_secret: str = Field(default="not-set", alias="JIRA_CLIENT_SECRET")
+
+    github_client_id: str = Field(default="not-set", alias="GITHUB_CLIENT_ID")
+    github_client_secret: str = Field(default="not-set", alias="GITHUB_CLIENT_SECRET")
+
+    # Shared by Microsoft Teams and Microsoft 365 — both go through the
+    # same Microsoft Entra ID (Azure AD) app registration and Graph API.
+    microsoft_client_id: str = Field(default="not-set", alias="MICROSOFT_CLIENT_ID")
+    microsoft_client_secret: str = Field(default="not-set", alias="MICROSOFT_CLIENT_SECRET")
+
+    servicenow_client_id: str = Field(default="not-set", alias="SERVICENOW_CLIENT_ID")
+    servicenow_client_secret: str = Field(default="not-set", alias="SERVICENOW_CLIENT_SECRET")
+
+    sap_client_id: str = Field(default="not-set", alias="SAP_CLIENT_ID")
+    sap_client_secret: str = Field(default="not-set", alias="SAP_CLIENT_SECRET")
+
+    oracle_client_id: str = Field(default="not-set", alias="ORACLE_CLIENT_ID")
+    oracle_client_secret: str = Field(default="not-set", alias="ORACLE_CLIENT_SECRET")
+
+    whatsapp_client_id: str = Field(default="not-set", alias="WHATSAPP_CLIENT_ID")
+    whatsapp_client_secret: str = Field(default="not-set", alias="WHATSAPP_CLIENT_SECRET")
+
     # Shared infra, deliberately unprefixed (alias bypasses env_prefix) —
     # same broker every service that publishes/consumes analytics/audit
     # events would use.

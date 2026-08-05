@@ -8,6 +8,7 @@ class AgentCreate(BaseModel):
     employee_id: uuid.UUID
     name: str = "Personal Assistant"
     personality: str | None = None
+    provider: str = "claude"
     model: str = "claude-sonnet-5"
     temperature: float = Field(default=1.0, ge=0.0, le=1.0)
     prompt: str = "You are a helpful personal assistant for this employee."
@@ -20,6 +21,7 @@ class AgentCreate(BaseModel):
 class AgentUpdate(BaseModel):
     name: str | None = None
     personality: str | None = None
+    provider: str | None = None
     model: str | None = None
     temperature: float | None = Field(default=None, ge=0.0, le=1.0)
     prompt: str | None = None
@@ -36,6 +38,7 @@ class AgentOut(BaseModel):
     employee_id: uuid.UUID
     name: str
     personality: str | None
+    provider: str
     model: str
     temperature: float
     prompt: str

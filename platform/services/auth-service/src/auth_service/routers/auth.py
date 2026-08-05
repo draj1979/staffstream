@@ -6,7 +6,12 @@ from auth.config import ACCESS_TOKEN_TTL_SECONDS, REFRESH_TOKEN_TTL_DAYS
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from auth import encode_access_token, hash_password, highest_role, verify_password
+from auth import (
+    encode_access_token,
+    hash_password_async,
+    highest_role,
+    verify_password_async,
+)
 from tenancy import tenant_context
 
 from .. import crud
@@ -64,7 +69,7 @@ async def signup(
         db,
         employee_id=employee_id,
         email=data.email,
-        password_hash=hash_password(data.password),
+        password_hash=await hash_password_async(data.password),
     )
     return await _issue_token_pair(
         db, tenant_id, employee_id, role=highest_role(employee.get("roles", []))
@@ -78,7 +83,9 @@ async def login(
     db: AsyncSession = Depends(get_db),
 ):
     credential = await crud.get_credential_by_email(db, data.email)
-    if credential is None or not verify_password(data.password, credential.password_hash):
+    if credential is None or not await verify_password_async(
+        data.password, credential.password_hash
+    ):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid email or password"
         )

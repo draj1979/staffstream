@@ -44,6 +44,26 @@ async def test_get_own_tenant_succeeds(client):
     assert resp.json()["tenant_id"] == tenant_id
 
 
+async def test_get_tenant_accepts_system_token_for_its_own_tenant(client):
+    """Employee Service's agent-creation flow reads llm_config with a
+    system token, since it runs during employee bootstrap — before that
+    employee necessarily has a live session of their own."""
+    resp = await client.post("/tenants", json={"company_name": "Acme Corp"})
+    tenant_id = resp.json()["tenant_id"]
+
+    resp = await client.get(f"/tenants/{tenant_id}", headers=system_headers(uuid.UUID(tenant_id)))
+    assert resp.status_code == 200
+    assert resp.json()["tenant_id"] == tenant_id
+
+
+async def test_get_tenant_rejects_system_token_for_a_different_tenant(client):
+    resp = await client.post("/tenants", json={"company_name": "Acme Corp"})
+    tenant_id = resp.json()["tenant_id"]
+
+    resp = await client.get(f"/tenants/{tenant_id}", headers=system_headers(uuid.uuid4()))
+    assert resp.status_code == 403
+
+
 async def test_get_other_tenant_is_forbidden(client):
     resp = await client.post("/tenants", json={"company_name": "Acme Corp"})
     tenant_id = resp.json()["tenant_id"]

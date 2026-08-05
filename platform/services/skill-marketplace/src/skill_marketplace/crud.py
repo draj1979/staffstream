@@ -85,6 +85,7 @@ async def upsert_connection(
         existing.token_expires_at = tokens.expires_at
         existing.granted_scope = tokens.scope
         existing.external_account = tokens.external_account
+        existing.connection_metadata = tokens.extra
         await db.commit()
         await db.refresh(existing)
         return existing
@@ -97,6 +98,7 @@ async def upsert_connection(
         token_expires_at=tokens.expires_at,
         granted_scope=tokens.scope,
         external_account=tokens.external_account,
+        connection_metadata=tokens.extra,
     )
     db.add(row)
     await db.commit()
@@ -113,6 +115,8 @@ async def update_connection_tokens(
     connection.token_expires_at = tokens.expires_at
     if tokens.scope:
         connection.granted_scope = tokens.scope
+    if tokens.extra:
+        connection.connection_metadata = tokens.extra
     await db.commit()
     await db.refresh(connection)
     return connection

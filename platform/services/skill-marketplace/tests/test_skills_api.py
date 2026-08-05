@@ -24,7 +24,20 @@ async def test_catalog_skills_start_disabled(client):
     resp = await client.get("/skills", headers=headers(tenant_id))
     assert resp.status_code == 200
     body = {s["skill_id"]: s for s in resp.json()}
-    assert set(body) == {"slack", "google_calendar"}
+    assert set(body) == {
+        "slack",
+        "google_calendar",
+        "salesforce",
+        "hubspot",
+        "jira",
+        "github",
+        "microsoft_teams",
+        "microsoft_365",
+        "servicenow",
+        "sap",
+        "oracle",
+        "whatsapp",
+    }
     assert body["slack"]["enabled"] is False
     assert body["google_calendar"]["enabled"] is False
 
