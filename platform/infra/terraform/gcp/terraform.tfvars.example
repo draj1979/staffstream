@@ -1,0 +1,13 @@
+# Copy to terraform.tfvars (gitignored — see ../../.gitignore) and fill
+# in. Never put secret *values* in here — see variables.tf's comment on
+# why those are populated separately, out of Terraform state entirely.
+
+project_id        = "my-staffstream-project"
+region             = "us-central1"
+environment        = "prod"
+github_repository = "draj1979/staffstream"
+github_deploy_ref = "refs/heads/main"
+
+# Flip on once the cluster's up and reachable — see argocd.tf's bring-up
+# ordering caveat.
+install_argocd = false

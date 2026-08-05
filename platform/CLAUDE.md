@@ -81,8 +81,12 @@ LLM Models, API Keys.
 - Message queue: Kafka or RabbitMQ
 - Workflow engine: Temporal or OpenClaw Workflows
 - Orchestration: Kubernetes (GKE / EKS / AKS)
+- Infrastructure as code: Terraform (GCP path implemented — see
+  `infra/terraform/gcp` and `docs/gcp-deployment.md`)
 - Observability: Prometheus + Grafana, Loki + OpenTelemetry
-- CI/CD: GitHub Actions + ArgoCD
+- CI/CD: GitHub Actions + ArgoCD (GCP path implemented, Workload Identity
+  Federation, no service account key files — see
+  `.github/workflows/deploy-gcp.yml`)
 - LLM Gateway: LiteLLM or a custom gateway
 
 ## Security baseline (apply from phase 0, don't defer)

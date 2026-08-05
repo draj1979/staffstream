@@ -508,9 +508,14 @@ precedent as Analytics Service.
 Every service has its own `Dockerfile` (multi-stage, `uv`-based, built
 from the repo root since this is a uv workspace — see any service's
 Dockerfile for the exact command). `make docker-build` builds all twelve.
-`infra/k8s/` has Deployment + Service manifests for all twelve plus the
+`infra/k8s/base/` has Deployment + Service manifests for all twelve plus the
 namespace, ConfigMap, Secret template, and in-cluster Postgres/Redis/RabbitMQ —
 see [infra/k8s/README.md](infra/k8s/README.md) for the full deploy flow.
+`infra/k8s/overlays/gcp/` layers Secret Manager + Cloud SQL on top of that
+same base for a real GCP deployment — see
+[docs/gcp-deployment.md](docs/gcp-deployment.md) for how that overlay,
+`infra/terraform/gcp`, and the GitHub Actions deploy workflow fit
+together.
 Every Deployment's `livenessProbe` hits `/healthz` (process alive — never
 checks dependencies, so a DB blip doesn't get the pod restarted) and its
 `readinessProbe` hits `/readyz` (DB-backed services actually check DB
@@ -532,7 +537,7 @@ and reasoning per service).
 pool (`pool_size=10`/`max_overflow=15` per pod, Postgres URLs only —
 sqlite in tests is untouched) — bumped up from SQLAlchemy's single-instance
 defaults after a load test showed them queuing under concurrent multi-tenant
-traffic. The shared Postgres instance's `max_connections` (`infra/k8s/postgres.yaml`)
+traffic. The shared Postgres instance's `max_connections` (`infra/k8s/base/postgres.yaml`)
 is bumped to match. `scripts/load_test.py` drives many concurrent tenants
 through the real API Gateway and asserts tenant isolation and per-tenant
 rate limiting both hold under that concurrency — see
@@ -621,6 +626,9 @@ scripts/               load_test.py — multi-tenant concurrency + rate-limit lo
 infra/
   docker/               docker-compose init scripts
   k8s/                  Deployment/Service/HorizontalPodAutoscaler/ConfigMap/Secret manifests, single namespace
+    base/                 the local/kind deployment (Phase 6's original scope)
+    overlays/gcp/          GCP deployment: Secret Manager CSI + Cloud SQL Auth Proxy patches on top of base/
+  terraform/gcp/        GCP infra as code: VPC, Cloud SQL, Memorystore, GKE Autopilot, Artifact Registry, Secret Manager, Workload Identity Federation
 ```
 
 Every service directory also has its own `Dockerfile`.

@@ -1,0 +1,433 @@
+# Strategic-merge patches, one per Deployment — each adds:
+#   - serviceAccountName: <service>-ksa (Workload Identity — see
+#     service-accounts.yaml + ../../../terraform/gcp/workload_identity.tf)
+#   - a CSI volume + volume mount wired to that service's own
+#     SecretProviderClass (secret-provider-classes.yaml); the mount is what
+#     triggers the Secret Manager -> Kubernetes Secret sync, nothing in the
+#     app reads /mnt/secrets-store directly
+#   - envFrom.secretRef swapped from the shared staffstream-secrets to this
+#     service's own synced <service>-secrets (same env var names, so no
+#     application code changes)
+#   - for the 9 DB-backed services: a cloud-sql-proxy sidecar container,
+#     authenticating via the same Workload Identity binding (needs
+#     roles/cloudsql.client, granted in workload_identity.tf) — no
+#     password on this hop, the DATABASE_URL secret's password is for the
+#     proxy-to-Postgres hop behind it
+#
+# What's UNCHANGED and therefore not repeated here: image, ports, probes,
+# resources, the configMapRef half of envFrom — strategic merge only
+# needs the fields actually changing; kustomize composes this on top of
+# ../../services/<name>.yaml's base Deployment untouched.
+#
+# __GCP_PROJECT_ID__ / __GCP_REGION__ / __GCP_ENVIRONMENT__ get replaced
+# once by set-gcp-project.sh — see this directory's README.md.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tenant-service
+  namespace: staffstream
+spec:
+  template:
+    spec:
+      serviceAccountName: tenant-service-ksa
+      volumes:
+        - name: secrets-store
+          csi:
+            driver: secrets-store.csi.k8s.io
+            readOnly: true
+            volumeAttributes:
+              secretProviderClass: tenant-service-secrets
+      containers:
+        - name: tenant-service
+          envFrom:
+            - configMapRef: {name: staffstream-config}
+            - secretRef: {name: tenant-service-secrets}
+          volumeMounts:
+            - name: secrets-store
+              mountPath: /mnt/secrets-store
+              readOnly: true
+        - name: cloud-sql-proxy
+          image: gcr.io/cloud-sql-connectors/cloud-sql-proxy:2.14.0
+          args:
+            - "--structured-logs"
+            - "--port=5432"
+            - "__GCP_PROJECT_ID__:__GCP_REGION__:staffstream-main-__GCP_ENVIRONMENT__"
+          securityContext:
+            runAsNonRoot: true
+          resources:
+            requests: {cpu: "10m", memory: "32Mi"}
+            limits: {cpu: "100m", memory: "128Mi"}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: employee-service
+  namespace: staffstream
+spec:
+  template:
+    spec:
+      serviceAccountName: employee-service-ksa
+      volumes:
+        - name: secrets-store
+          csi:
+            driver: secrets-store.csi.k8s.io
+            readOnly: true
+            volumeAttributes:
+              secretProviderClass: employee-service-secrets
+      containers:
+        - name: employee-service
+          envFrom:
+            - configMapRef: {name: staffstream-config}
+            - secretRef: {name: employee-service-secrets}
+          volumeMounts:
+            - name: secrets-store
+              mountPath: /mnt/secrets-store
+              readOnly: true
+        - name: cloud-sql-proxy
+          image: gcr.io/cloud-sql-connectors/cloud-sql-proxy:2.14.0
+          args:
+            - "--structured-logs"
+            - "--port=5432"
+            - "__GCP_PROJECT_ID__:__GCP_REGION__:staffstream-main-__GCP_ENVIRONMENT__"
+          securityContext:
+            runAsNonRoot: true
+          resources:
+            requests: {cpu: "10m", memory: "32Mi"}
+            limits: {cpu: "100m", memory: "128Mi"}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: auth-service
+  namespace: staffstream
+spec:
+  template:
+    spec:
+      serviceAccountName: auth-service-ksa
+      volumes:
+        - name: secrets-store
+          csi:
+            driver: secrets-store.csi.k8s.io
+            readOnly: true
+            volumeAttributes:
+              secretProviderClass: auth-service-secrets
+      containers:
+        - name: auth-service
+          envFrom:
+            - configMapRef: {name: staffstream-config}
+            - secretRef: {name: auth-service-secrets}
+          volumeMounts:
+            - name: secrets-store
+              mountPath: /mnt/secrets-store
+              readOnly: true
+        - name: cloud-sql-proxy
+          image: gcr.io/cloud-sql-connectors/cloud-sql-proxy:2.14.0
+          args:
+            - "--structured-logs"
+            - "--port=5432"
+            - "__GCP_PROJECT_ID__:__GCP_REGION__:staffstream-main-__GCP_ENVIRONMENT__"
+          securityContext:
+            runAsNonRoot: true
+          resources:
+            requests: {cpu: "10m", memory: "32Mi"}
+            limits: {cpu: "100m", memory: "128Mi"}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: agent-registry
+  namespace: staffstream
+spec:
+  template:
+    spec:
+      serviceAccountName: agent-registry-ksa
+      volumes:
+        - name: secrets-store
+          csi:
+            driver: secrets-store.csi.k8s.io
+            readOnly: true
+            volumeAttributes:
+              secretProviderClass: agent-registry-secrets
+      containers:
+        - name: agent-registry
+          envFrom:
+            - configMapRef: {name: staffstream-config}
+            - secretRef: {name: agent-registry-secrets}
+          volumeMounts:
+            - name: secrets-store
+              mountPath: /mnt/secrets-store
+              readOnly: true
+        - name: cloud-sql-proxy
+          image: gcr.io/cloud-sql-connectors/cloud-sql-proxy:2.14.0
+          args:
+            - "--structured-logs"
+            - "--port=5432"
+            - "__GCP_PROJECT_ID__:__GCP_REGION__:staffstream-main-__GCP_ENVIRONMENT__"
+          securityContext:
+            runAsNonRoot: true
+          resources:
+            requests: {cpu: "10m", memory: "32Mi"}
+            limits: {cpu: "100m", memory: "128Mi"}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: llm-gateway
+  namespace: staffstream
+spec:
+  template:
+    spec:
+      serviceAccountName: llm-gateway-ksa
+      volumes:
+        - name: secrets-store
+          csi:
+            driver: secrets-store.csi.k8s.io
+            readOnly: true
+            volumeAttributes:
+              secretProviderClass: llm-gateway-secrets
+      containers:
+        - name: llm-gateway
+          envFrom:
+            - configMapRef: {name: staffstream-config}
+            - secretRef: {name: llm-gateway-secrets}
+          volumeMounts:
+            - name: secrets-store
+              mountPath: /mnt/secrets-store
+              readOnly: true
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: openclaw-runtime
+  namespace: staffstream
+spec:
+  template:
+    spec:
+      serviceAccountName: openclaw-runtime-ksa
+      volumes:
+        - name: secrets-store
+          csi:
+            driver: secrets-store.csi.k8s.io
+            readOnly: true
+            volumeAttributes:
+              secretProviderClass: openclaw-runtime-secrets
+      containers:
+        - name: openclaw-runtime
+          envFrom:
+            - configMapRef: {name: staffstream-config}
+            - secretRef: {name: openclaw-runtime-secrets}
+          volumeMounts:
+            - name: secrets-store
+              mountPath: /mnt/secrets-store
+              readOnly: true
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: memory-service
+  namespace: staffstream
+spec:
+  template:
+    spec:
+      serviceAccountName: memory-service-ksa
+      volumes:
+        - name: secrets-store
+          csi:
+            driver: secrets-store.csi.k8s.io
+            readOnly: true
+            volumeAttributes:
+              secretProviderClass: memory-service-secrets
+      containers:
+        - name: memory-service
+          envFrom:
+            - configMapRef: {name: staffstream-config}
+            - secretRef: {name: memory-service-secrets}
+          volumeMounts:
+            - name: secrets-store
+              mountPath: /mnt/secrets-store
+              readOnly: true
+        - name: cloud-sql-proxy
+          image: gcr.io/cloud-sql-connectors/cloud-sql-proxy:2.14.0
+          args:
+            - "--structured-logs"
+            - "--port=5432"
+            - "__GCP_PROJECT_ID__:__GCP_REGION__:staffstream-main-__GCP_ENVIRONMENT__"
+          securityContext:
+            runAsNonRoot: true
+          resources:
+            requests: {cpu: "10m", memory: "32Mi"}
+            limits: {cpu: "100m", memory: "128Mi"}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: knowledge-service
+  namespace: staffstream
+spec:
+  template:
+    spec:
+      serviceAccountName: knowledge-service-ksa
+      volumes:
+        - name: secrets-store
+          csi:
+            driver: secrets-store.csi.k8s.io
+            readOnly: true
+            volumeAttributes:
+              secretProviderClass: knowledge-service-secrets
+      containers:
+        - name: knowledge-service
+          envFrom:
+            - configMapRef: {name: staffstream-config}
+            - secretRef: {name: knowledge-service-secrets}
+          volumeMounts:
+            - name: secrets-store
+              mountPath: /mnt/secrets-store
+              readOnly: true
+        - name: cloud-sql-proxy
+          image: gcr.io/cloud-sql-connectors/cloud-sql-proxy:2.14.0
+          args:
+            - "--structured-logs"
+            - "--port=5432"
+            - "__GCP_PROJECT_ID__:__GCP_REGION__:staffstream-vector-__GCP_ENVIRONMENT__"
+          securityContext:
+            runAsNonRoot: true
+          resources:
+            requests: {cpu: "10m", memory: "32Mi"}
+            limits: {cpu: "100m", memory: "128Mi"}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api-gateway
+  namespace: staffstream
+spec:
+  template:
+    spec:
+      serviceAccountName: api-gateway-ksa
+      volumes:
+        - name: secrets-store
+          csi:
+            driver: secrets-store.csi.k8s.io
+            readOnly: true
+            volumeAttributes:
+              secretProviderClass: api-gateway-secrets
+      containers:
+        - name: api-gateway
+          envFrom:
+            - configMapRef: {name: staffstream-config}
+            - secretRef: {name: api-gateway-secrets}
+          volumeMounts:
+            - name: secrets-store
+              mountPath: /mnt/secrets-store
+              readOnly: true
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: analytics-service
+  namespace: staffstream
+spec:
+  template:
+    spec:
+      serviceAccountName: analytics-service-ksa
+      volumes:
+        - name: secrets-store
+          csi:
+            driver: secrets-store.csi.k8s.io
+            readOnly: true
+            volumeAttributes:
+              secretProviderClass: analytics-service-secrets
+      containers:
+        - name: analytics-service
+          envFrom:
+            - configMapRef: {name: staffstream-config}
+            - secretRef: {name: analytics-service-secrets}
+          volumeMounts:
+            - name: secrets-store
+              mountPath: /mnt/secrets-store
+              readOnly: true
+        - name: cloud-sql-proxy
+          image: gcr.io/cloud-sql-connectors/cloud-sql-proxy:2.14.0
+          args:
+            - "--structured-logs"
+            - "--port=5432"
+            - "__GCP_PROJECT_ID__:__GCP_REGION__:staffstream-main-__GCP_ENVIRONMENT__"
+          securityContext:
+            runAsNonRoot: true
+          resources:
+            requests: {cpu: "10m", memory: "32Mi"}
+            limits: {cpu: "100m", memory: "128Mi"}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: skill-marketplace
+  namespace: staffstream
+spec:
+  template:
+    spec:
+      serviceAccountName: skill-marketplace-ksa
+      volumes:
+        - name: secrets-store
+          csi:
+            driver: secrets-store.csi.k8s.io
+            readOnly: true
+            volumeAttributes:
+              secretProviderClass: skill-marketplace-secrets
+      containers:
+        - name: skill-marketplace
+          envFrom:
+            - configMapRef: {name: staffstream-config}
+            - secretRef: {name: skill-marketplace-secrets}
+          volumeMounts:
+            - name: secrets-store
+              mountPath: /mnt/secrets-store
+              readOnly: true
+        - name: cloud-sql-proxy
+          image: gcr.io/cloud-sql-connectors/cloud-sql-proxy:2.14.0
+          args:
+            - "--structured-logs"
+            - "--port=5432"
+            - "__GCP_PROJECT_ID__:__GCP_REGION__:staffstream-main-__GCP_ENVIRONMENT__"
+          securityContext:
+            runAsNonRoot: true
+          resources:
+            requests: {cpu: "10m", memory: "32Mi"}
+            limits: {cpu: "100m", memory: "128Mi"}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: audit-service
+  namespace: staffstream
+spec:
+  template:
+    spec:
+      serviceAccountName: audit-service-ksa
+      volumes:
+        - name: secrets-store
+          csi:
+            driver: secrets-store.csi.k8s.io
+            readOnly: true
+            volumeAttributes:
+              secretProviderClass: audit-service-secrets
+      containers:
+        - name: audit-service
+          envFrom:
+            - configMapRef: {name: staffstream-config}
+            - secretRef: {name: audit-service-secrets}
+          volumeMounts:
+            - name: secrets-store
+              mountPath: /mnt/secrets-store
+              readOnly: true
+        - name: cloud-sql-proxy
+          image: gcr.io/cloud-sql-connectors/cloud-sql-proxy:2.14.0
+          args:
+            - "--structured-logs"
+            - "--port=5432"
+            - "__GCP_PROJECT_ID__:__GCP_REGION__:staffstream-main-__GCP_ENVIRONMENT__"
+          securityContext:
+            runAsNonRoot: true
+          resources:
+            requests: {cpu: "10m", memory: "32Mi"}
+            limits: {cpu: "100m", memory: "128Mi"}

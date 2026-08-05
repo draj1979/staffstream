@@ -16,3 +16,16 @@ htmlcov/
 .DS_Store
 node_modules/
 infra/k8s/secret.yaml
+
+# Terraform — state and plan files can contain resource attributes that
+# are effectively secret (e.g. generated DB passwords in secrets.tf's
+# outputs), and .tfvars is where a real project_id/environment lives, not
+# something to commit. .terraform.lock.hcl is deliberately NOT ignored
+# (like uv.lock, it's meant to be committed) — nor is
+# terraform.tfvars.example, which is the template, no real values.
+**/.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+*.tfvars
+!terraform.tfvars.example

@@ -1,0 +1,32 @@
+# The base every overlay builds on — this is exactly the local/kind
+# deployment described in ../../../README.md's "Containers & Kubernetes"
+# section and ../README.md, just made buildable with
+# `kubectl apply -k infra/k8s/base` (or `kustomize build infra/k8s/base`)
+# instead of the manual `kubectl apply -f` sequence those docs still show
+# (both work identically; -k is just less to type and is what
+# ../overlays/gcp builds on top of — a Kustomize overlay can only
+# reference a base living outside its own directory tree, hence base/ and
+# overlays/ as siblings rather than the overlay nested inside this one).
+# ../secret.example.yaml is deliberately NOT listed here — it's a
+# template to copy to a gitignored secret.yaml, never applied directly.
+namespace: staffstream
+
+resources:
+  - namespace.yaml
+  - configmap.yaml
+  - postgres.yaml
+  - postgres-vector.yaml
+  - redis.yaml
+  - rabbitmq.yaml
+  - services/tenant-service.yaml
+  - services/employee-service.yaml
+  - services/auth-service.yaml
+  - services/agent-registry.yaml
+  - services/llm-gateway.yaml
+  - services/openclaw-runtime.yaml
+  - services/memory-service.yaml
+  - services/knowledge-service.yaml
+  - services/api-gateway.yaml
+  - services/analytics-service.yaml
+  - services/skill-marketplace.yaml
+  - services/audit-service.yaml
