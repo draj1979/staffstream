@@ -1,5 +1,11 @@
 name: CI
 
+# This repo's actual Python project (the uv workspace, all services/libs)
+# lives under platform/, not the repo root — design_ref/ and site/ are
+# separate, unrelated content sharing this same git repo. Every step
+# below runs with working-directory: platform (job-level default) or an
+# explicit platform/-prefixed path, rather than assuming the repo root
+# is the project root.
 on:
   push:
     branches: [main]
@@ -8,6 +14,9 @@ on:
 jobs:
   lint-and-test:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: platform
     steps:
       - uses: actions/checkout@v4
 
@@ -32,6 +41,9 @@ jobs:
 
   migrations:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: platform
     services:
       postgres:
         image: postgres:16-alpine
@@ -90,67 +102,70 @@ jobs:
             -c "CREATE DATABASE audit_service"
 
       - name: Migrate tenant-service against real Postgres
-        working-directory: services/tenant-service
+        working-directory: platform/services/tenant-service
         env:
           TENANT_SERVICE_DATABASE_URL: postgresql+asyncpg://staffstream:staffstream@localhost:5432/tenant_service
         run: uv run alembic upgrade head
 
       - name: Migrate employee-service against real Postgres
-        working-directory: services/employee-service
+        working-directory: platform/services/employee-service
         env:
           EMPLOYEE_SERVICE_DATABASE_URL: postgresql+asyncpg://staffstream:staffstream@localhost:5432/employee_service
         run: uv run alembic upgrade head
 
       - name: Migrate auth-service against real Postgres
-        working-directory: services/auth-service
+        working-directory: platform/services/auth-service
         env:
           AUTH_SERVICE_DATABASE_URL: postgresql+asyncpg://staffstream:staffstream@localhost:5432/auth_service
         run: uv run alembic upgrade head
 
       - name: Migrate agent-registry against real Postgres
-        working-directory: services/agent-registry
+        working-directory: platform/services/agent-registry
         env:
           AGENT_REGISTRY_DATABASE_URL: postgresql+asyncpg://staffstream:staffstream@localhost:5432/agent_registry
         run: uv run alembic upgrade head
 
       - name: Migrate memory-service against real Postgres
-        working-directory: services/memory-service
+        working-directory: platform/services/memory-service
         env:
           MEMORY_SERVICE_DATABASE_URL: postgresql+asyncpg://staffstream:staffstream@localhost:5432/memory_service
         run: uv run alembic upgrade head
 
       - name: Migrate knowledge-service against real Postgres+pgvector
-        working-directory: services/knowledge-service
+        working-directory: platform/services/knowledge-service
         env:
           KNOWLEDGE_SERVICE_DATABASE_URL: postgresql+asyncpg://staffstream:staffstream@localhost:5434/knowledge_service
         run: uv run alembic upgrade head
 
       - name: Test knowledge-service against real Postgres+pgvector
-        working-directory: services/knowledge-service
+        working-directory: platform/services/knowledge-service
         env:
           KNOWLEDGE_SERVICE_DATABASE_URL: postgresql+asyncpg://staffstream:staffstream@localhost:5434/knowledge_service
         run: uv run pytest .
 
       - name: Migrate analytics-service against real Postgres
-        working-directory: services/analytics-service
+        working-directory: platform/services/analytics-service
         env:
           ANALYTICS_SERVICE_DATABASE_URL: postgresql+asyncpg://staffstream:staffstream@localhost:5432/analytics_service
         run: uv run alembic upgrade head
 
       - name: Migrate skill-marketplace against real Postgres
-        working-directory: services/skill-marketplace
+        working-directory: platform/services/skill-marketplace
         env:
           SKILL_MARKETPLACE_DATABASE_URL: postgresql+asyncpg://staffstream:staffstream@localhost:5432/skill_marketplace
         run: uv run alembic upgrade head
 
       - name: Migrate audit-service against real Postgres
-        working-directory: services/audit-service
+        working-directory: platform/services/audit-service
         env:
           AUDIT_SERVICE_DATABASE_URL: postgresql+asyncpg://staffstream:staffstream@localhost:5432/audit_service
         run: uv run alembic upgrade head
 
   events:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: platform
     services:
       rabbitmq:
         image: rabbitmq:3.13-management-alpine

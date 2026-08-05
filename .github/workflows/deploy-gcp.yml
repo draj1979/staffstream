@@ -1,26 +1,33 @@
 name: Deploy to GCP
 
 # Builds and pushes all twelve service images to Artifact Registry, then
-# bumps infra/k8s/overlays/gcp's image tags and commits that change back
-# to this repo. That commit is the entire "deploy" — Argo CD (installed
-# and bootstrapped by infra/terraform/gcp/argocd.tf, watching this exact
-# path with automated sync) is what actually applies the new tags to the
-# cluster. This workflow never touches the cluster directly: no kubeconfig,
-# no kubectl, no direct GKE credentials at all — see
-# infra/terraform/gcp/github_oidc.tf's comment on why that split matters.
+# bumps platform/infra/k8s/overlays/gcp's image tags and commits that
+# change back to this repo. That commit is the entire "deploy" — Argo CD
+# (installed and bootstrapped by platform/infra/terraform/gcp/argocd.tf,
+# watching this exact path with automated sync) is what actually applies
+# the new tags to the cluster. This workflow never touches the cluster
+# directly: no kubeconfig, no kubectl, no direct GKE credentials at all —
+# see platform/infra/terraform/gcp/github_oidc.tf's comment on why that
+# split matters.
+#
+# This repo's actual project (services/, libs/, infra/) lives under
+# platform/, not the repo root — design_ref/ and site/ are separate,
+# unrelated content sharing this git repo — so every path below is
+# platform/-prefixed rather than assuming the repo root is the project
+# root.
 on:
   push:
     branches: [main]
     paths:
-      - "services/**"
-      - "libs/**"
-      - "infra/k8s/**"
+      - "platform/services/**"
+      - "platform/libs/**"
+      - "platform/infra/k8s/**"
       - ".github/workflows/deploy-gcp.yml"
   workflow_dispatch: {}
 
 # Workload Identity Federation needs id-token; the tag-bump commit needs
 # contents write. Nothing here ever needs a GCP service account key file
-# — see infra/terraform/gcp/github_oidc.tf.
+# — see platform/infra/terraform/gcp/github_oidc.tf.
 permissions:
   contents: write
   id-token: write
@@ -39,7 +46,7 @@ env:
   # values are sensitive (a WIF provider resource name and a service
   # account email are not credentials, they're identifiers the OIDC
   # exchange itself proves possession against). Values come straight out
-  # of `terraform output` in infra/terraform/gcp:
+  # of `terraform output` in platform/infra/terraform/gcp:
   #   GCP_PROJECT_ID                    -> var.project_id
   #   GCP_REGION                        -> var.region
   #   GCP_WORKLOAD_IDENTITY_PROVIDER    -> output.github_actions_workload_identity_provider
@@ -85,15 +92,21 @@ jobs:
       - name: Build and push
         uses: docker/build-push-action@v6
         with:
-          context: .
-          file: services/${{ matrix.service }}/Dockerfile
+          # Build context is platform/ (the uv workspace root) — every
+          # Dockerfile's own header comment documents this same command
+          # shape (`docker build -f services/<svc>/Dockerfile -t ... .`
+          # run from platform/), since each service depends on sibling
+          # libs/ packages that need the whole workspace manifest tree
+          # present to resolve.
+          context: platform
+          file: platform/services/${{ matrix.service }}/Dockerfile
           push: true
           tags: |
             ${{ env.GCP_REGION }}-docker.pkg.dev/${{ env.GCP_PROJECT_ID }}/staffstream/${{ matrix.service }}:${{ github.sha }}
             ${{ env.GCP_REGION }}-docker.pkg.dev/${{ env.GCP_PROJECT_ID }}/staffstream/${{ matrix.service }}:latest
           # `latest` is convenience/inspection only (see
-          # infra/terraform/gcp/artifact_registry.tf's comment) — the
-          # commit-SHA tag below is what the overlay's `images:`
+          # platform/infra/terraform/gcp/artifact_registry.tf's comment) —
+          # the commit-SHA tag below is what the overlay's `images:`
           # transformer and Argo CD actually deploy.
           cache-from: type=gha,scope=${{ matrix.service }}
           cache-to: type=gha,mode=max,scope=${{ matrix.service }}
@@ -110,7 +123,7 @@ jobs:
           curl -sfL "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh" | bash -s -- 5.4.3 /usr/local/bin
 
       - name: Set each service's image tag to this commit's SHA
-        working-directory: infra/k8s/overlays/gcp
+        working-directory: platform/infra/k8s/overlays/gcp
         run: |
           set -euo pipefail
           services=(
@@ -128,14 +141,14 @@ jobs:
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add infra/k8s/overlays/gcp/kustomization.yaml
+          git add platform/infra/k8s/overlays/gcp/kustomization.yaml
           if git diff --cached --quiet; then
             echo "No image tag changes (images already at this SHA) — nothing to deploy."
             exit 0
           fi
           # [skip ci]: this same push would otherwise re-trigger this
-          # workflow (it touches infra/k8s/**, one of this workflow's own
-          # path filters) — GitHub Actions honors this marker and won't
-          # start a new run for a commit that carries it.
+          # workflow (it touches platform/infra/k8s/**, one of this
+          # workflow's own path filters) — GitHub Actions honors this
+          # marker and won't start a new run for a commit that carries it.
           git commit -m "deploy: bump GCP overlay images to ${GITHUB_SHA} [skip ci]"
           git push

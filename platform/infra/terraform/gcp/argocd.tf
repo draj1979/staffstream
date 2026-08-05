@@ -1,12 +1,19 @@
 # Optional (var.install_argocd, off by default — see variables.tf) so a
 # first bring-up doesn't try to install into a cluster that isn't
 # reachable/ready yet. Installs Argo CD itself, then a single root
-# "app of apps" Application pointed at ../k8s/overlays/gcp — from there,
-# Argo CD (not this Terraform config, and not the GitHub Actions workflow
-# directly) owns applying every Deployment/Service/HPA/SecretProviderClass
-# in this repo. CI's job ends at "push a new image tag to git" (see
-# ../../.github/workflows/deploy-gcp.yml); Argo CD's own sync/diff/rollback
-# is what actually changes the cluster.
+# "app of apps" Application pointed at platform/infra/k8s/overlays/gcp —
+# from there, Argo CD (not this Terraform config, and not the GitHub
+# Actions workflow directly) owns applying every
+# Deployment/Service/HPA/SecretProviderClass in this repo. CI's job ends
+# at "push a new image tag to git" (see
+# ../../../.github/workflows/deploy-gcp.yml); Argo CD's own
+# sync/diff/rollback is what actually changes the cluster.
+#
+# The path is platform/-prefixed because Argo CD clones the whole git
+# repo (var.argocd_git_repo_url) at its true root, and this Terraform
+# project — along with everything else it deploys — lives under a
+# platform/ subdirectory of that repo, not at the repo root (design_ref/
+# and site/ are unrelated content sharing the same repo).
 #
 # Known bring-up ordering caveat (same shape as providers.tf's GKE one):
 # kubernetes_manifest for the Application CRD needs Argo CD's own CRDs to
@@ -53,7 +60,7 @@ resource "kubernetes_manifest" "argocd_root_app" {
       source = {
         repoURL        = var.argocd_git_repo_url
         targetRevision = "HEAD"
-        path           = "infra/k8s/overlays/gcp"
+        path           = "platform/infra/k8s/overlays/gcp"
       }
       destination = {
         server    = "https://kubernetes.default.svc"
