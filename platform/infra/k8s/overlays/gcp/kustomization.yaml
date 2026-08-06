@@ -36,6 +36,14 @@ resources:
   # The 12 per-Deployment patches described at the top of this file — one
   # file, no explicit `target:` needed since each document inside already
   # carries its own kind/name for Kustomize to match against.
+
+  # rabbitmq stays in-cluster (see the top comment) but still needs the
+  # same Balanced compute-class nodeSelector as every service Deployment
+  # in deployment-patches.yaml — Autopilot's default general-purpose
+  # class (E2) has zero quota in this project's deploy region. Kept as
+  # its own patch rather than folded into deployment-patches.yaml since
+  # rabbitmq isn't a StaffStream service Deployment in the same sense
+  # (no KSA/CSI/proxy patches apply to it).
 patches:
 - patch: |-
     - op: remove
@@ -107,14 +115,6 @@ patches:
       namespace: staffstream
     $patch: delete
 - path: deployment-patches.yaml
-
-  # rabbitmq stays in-cluster (see the top comment) but still needs the
-  # same Balanced compute-class nodeSelector as every service Deployment
-  # in deployment-patches.yaml — Autopilot's default general-purpose
-  # class (E2) has zero quota in this project's deploy region. Kept as
-  # its own patch rather than folded into deployment-patches.yaml since
-  # rabbitmq isn't a StaffStream service Deployment in the same sense
-  # (no KSA/CSI/proxy patches apply to it).
 - patch: |-
     apiVersion: apps/v1
     kind: Deployment
@@ -138,39 +138,39 @@ patches:
 images:
 - name: staffstream/agent-registry
   newName: asia-south1-docker.pkg.dev/rational-medley-466807-b3/staffstream/agent-registry
-  newTag: d35483b957165d0179896035a70c73b7e1451a1b
+  newTag: d20555dbc4e7ce8262f26668789554e1a1d03477
 - name: staffstream/analytics-service
   newName: asia-south1-docker.pkg.dev/rational-medley-466807-b3/staffstream/analytics-service
-  newTag: d35483b957165d0179896035a70c73b7e1451a1b
+  newTag: d20555dbc4e7ce8262f26668789554e1a1d03477
 - name: staffstream/api-gateway
   newName: asia-south1-docker.pkg.dev/rational-medley-466807-b3/staffstream/api-gateway
-  newTag: d35483b957165d0179896035a70c73b7e1451a1b
+  newTag: d20555dbc4e7ce8262f26668789554e1a1d03477
 - name: staffstream/audit-service
   newName: asia-south1-docker.pkg.dev/rational-medley-466807-b3/staffstream/audit-service
-  newTag: d35483b957165d0179896035a70c73b7e1451a1b
+  newTag: d20555dbc4e7ce8262f26668789554e1a1d03477
 - name: staffstream/auth-service
   newName: asia-south1-docker.pkg.dev/rational-medley-466807-b3/staffstream/auth-service
-  newTag: d35483b957165d0179896035a70c73b7e1451a1b
+  newTag: d20555dbc4e7ce8262f26668789554e1a1d03477
 - name: staffstream/employee-service
   newName: asia-south1-docker.pkg.dev/rational-medley-466807-b3/staffstream/employee-service
-  newTag: d35483b957165d0179896035a70c73b7e1451a1b
+  newTag: d20555dbc4e7ce8262f26668789554e1a1d03477
 - name: staffstream/knowledge-service
   newName: asia-south1-docker.pkg.dev/rational-medley-466807-b3/staffstream/knowledge-service
-  newTag: d35483b957165d0179896035a70c73b7e1451a1b
+  newTag: d20555dbc4e7ce8262f26668789554e1a1d03477
 - name: staffstream/llm-gateway
   newName: asia-south1-docker.pkg.dev/rational-medley-466807-b3/staffstream/llm-gateway
-  newTag: d35483b957165d0179896035a70c73b7e1451a1b
+  newTag: d20555dbc4e7ce8262f26668789554e1a1d03477
 - name: staffstream/memory-service
   newName: asia-south1-docker.pkg.dev/rational-medley-466807-b3/staffstream/memory-service
-  newTag: d35483b957165d0179896035a70c73b7e1451a1b
+  newTag: d20555dbc4e7ce8262f26668789554e1a1d03477
 - name: staffstream/openclaw-runtime
   newName: asia-south1-docker.pkg.dev/rational-medley-466807-b3/staffstream/openclaw-runtime
-  newTag: d35483b957165d0179896035a70c73b7e1451a1b
+  newTag: d20555dbc4e7ce8262f26668789554e1a1d03477
 - name: staffstream/skill-marketplace
   newName: asia-south1-docker.pkg.dev/rational-medley-466807-b3/staffstream/skill-marketplace
-  newTag: d35483b957165d0179896035a70c73b7e1451a1b
+  newTag: d20555dbc4e7ce8262f26668789554e1a1d03477
 - name: staffstream/tenant-service
   newName: asia-south1-docker.pkg.dev/rational-medley-466807-b3/staffstream/tenant-service
-  newTag: d35483b957165d0179896035a70c73b7e1451a1b
+  newTag: d20555dbc4e7ce8262f26668789554e1a1d03477
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
