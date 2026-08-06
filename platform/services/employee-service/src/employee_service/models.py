@@ -1,7 +1,16 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import JSON, DateTime, ForeignKeyConstraint, String, UniqueConstraint, Uuid, func
+from sqlalchemy import (
+    JSON,
+    Boolean,
+    DateTime,
+    ForeignKeyConstraint,
+    String,
+    UniqueConstraint,
+    Uuid,
+    func,
+)
 from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -33,6 +42,11 @@ class Employee(TenantScopedBase):
     email: Mapped[str] = mapped_column(String(320), nullable=False)
     agent_id: Mapped[uuid.UUID | None] = mapped_column(Uuid)
     roles: Mapped[list[str]] = mapped_column(RolesVariant, nullable=False, default=list)
+    # Login access, not a soft-delete — a deactivated employee's row (and
+    # audit trail, agent, memory) is untouched, auth-service just refuses
+    # to issue tokens for them. Defaults true so every existing/bootstrap
+    # row stays functional without a backfill.
+    active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()

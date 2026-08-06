@@ -12,6 +12,7 @@ class EmployeeBase(BaseModel):
     email: EmailStr
     agent_id: uuid.UUID | None = None
     roles: list[str] = []
+    active: bool = True
 
 
 class EmployeeCreate(EmployeeBase):

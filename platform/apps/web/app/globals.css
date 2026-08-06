@@ -1,0 +1,108 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --ink: #14181f;
+  --fog: #eef1f1;
+  --brass: #c89b3c;
+  --signal: #2c6e8e;
+  --sage: #6b9080;
+  --crimson: #b23a48;
+
+  /* Light mode surfaces (default) */
+  --surface: #ffffff;
+  --surface-raised: #ffffff;
+  --border: #dde2e2;
+  --text-primary: var(--ink);
+  --text-muted: #565f6b;
+  --bg: var(--fog);
+
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --surface: #1b2028;
+    --surface-raised: #21262f;
+    --border: #30363f;
+    --text-primary: #edf0f2;
+    --text-muted: #9aa3ad;
+    --bg: var(--ink);
+    color-scheme: dark;
+  }
+}
+
+:root[data-theme="light"] {
+  --surface: #ffffff;
+  --surface-raised: #ffffff;
+  --border: #dde2e2;
+  --text-primary: var(--ink);
+  --text-muted: #565f6b;
+  --bg: var(--fog);
+  color-scheme: light;
+}
+
+:root[data-theme="dark"] {
+  --surface: #1b2028;
+  --surface-raised: #21262f;
+  --border: #30363f;
+  --text-primary: #edf0f2;
+  --text-muted: #9aa3ad;
+  --bg: var(--ink);
+  color-scheme: dark;
+}
+
+* {
+  border-color: var(--border);
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text-primary);
+  font-family: var(--font-plex-sans), system-ui, sans-serif;
+}
+
+.font-display {
+  font-family: var(--font-fraunces), Georgia, serif;
+  font-optical-sizing: auto;
+}
+
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+:focus-visible {
+  outline: 2px solid var(--signal);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Thin, unobtrusive scrollbars used inside drawers/panels */
+.thin-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+.thin-scroll::-webkit-scrollbar {
+  width: 8px;
+}
+.thin-scroll::-webkit-scrollbar-thumb {
+  background-color: var(--border);
+  border-radius: 8px;
+}

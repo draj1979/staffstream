@@ -4,10 +4,67 @@
 # external IP before Caddy starts, or the ACME HTTP-01 challenge fails —
 # see README.md's setup order.
 #
-# Everything proxies straight to api-gateway — it's already the reverse
-# proxy for every other service (see backend-compose.yml's ROUTES-driven
-# routing), so Caddy's only job here is TLS termination at the edge, not
-# path-based routing of its own.
+# Three kinds of traffic share this one domain, matched most-specific
+# first (Caddy's `handle` blocks are tried in the order they're written —
+# first match wins, so the frontend's catch-all has to come last):
+#
+# 1. analytics-service / audit-service, called directly — api-gateway's
+#    own ROUTES table (services/api-gateway/src/api_gateway/routing.py)
+#    has no entries for either, so routing them through it would 404.
+#    Rather than extend the gateway, the frontend calls these two path
+#    prefixes and Caddy sends them straight to their containers.
+# 2. Every other backend path prefix api-gateway DOES know how to route
+#    (see routing.py's ROUTES dict) — proxied to api-gateway, which does
+#    its own further routing to the right service from there.
+# 3. Everything else — the Next.js frontend app (apps/web) itself: page
+#    routes, static assets, and its own /app-api/* BFF routes. Must stay
+#    the fallback, not a prefix match, since the frontend owns whatever
+#    isn't explicitly claimed above (including "/", which none of the
+#    API prefixes below ever match).
 {$DEMO_DOMAIN} {
-	reverse_proxy api-gateway:8000
+	handle /analytics/* {
+		reverse_proxy analytics-service:8009
+	}
+	handle /audit-logs* {
+		reverse_proxy audit-service:8011
+	}
+	handle /tenants* {
+		reverse_proxy api-gateway:8000
+	}
+	handle /employees* {
+		reverse_proxy api-gateway:8000
+	}
+	handle /auth* {
+		reverse_proxy api-gateway:8000
+	}
+	handle /agents* {
+		reverse_proxy api-gateway:8000
+	}
+	handle /generate* {
+		reverse_proxy api-gateway:8000
+	}
+	handle /chat* {
+		reverse_proxy api-gateway:8000
+	}
+	handle /memory* {
+		reverse_proxy api-gateway:8000
+	}
+	handle /documents* {
+		reverse_proxy api-gateway:8000
+	}
+	handle /search* {
+		reverse_proxy api-gateway:8000
+	}
+	handle /skills* {
+		reverse_proxy api-gateway:8000
+	}
+	handle /connections* {
+		reverse_proxy api-gateway:8000
+	}
+	handle /tools* {
+		reverse_proxy api-gateway:8000
+	}
+	handle {
+		reverse_proxy web:3000
+	}
 }

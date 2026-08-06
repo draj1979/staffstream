@@ -1,20 +1,29 @@
-# backend-vm — the 10 services this demo covers: API Gateway, Auth,
-# Tenant, Employee, Agent Registry, LLM Gateway, Memory, Knowledge,
-# OpenClaw Runtime, Analytics — plus Caddy in front for automatic TLS.
+# backend-vm — all 12 platform services: API Gateway, Auth, Tenant,
+# Employee, Agent Registry, LLM Gateway, Memory, Knowledge, OpenClaw
+# Runtime, Analytics, Audit, Skill Marketplace — plus Caddy in front for
+# automatic TLS. Analytics and Audit are reached directly by the frontend
+# (see ../Caddyfile), not through api-gateway — its ROUTES table has no
+# entry for either, and the chosen fix was routing around it at the edge
+# rather than extending the gateway.
 #
-# Deliberately NOT included: Skill Marketplace and Audit Service. Skill
-# Marketplace needs per-connector OAuth app registrations to be useful at
-# all (nothing to demo without them); Audit Service and Analytics'
-# RabbitMQ-fed ingestion both need a message broker this two-VM layout
-# doesn't provision (db-vm is Postgres + Redis only, per the ask). This
-# isn't a silent gap: every service's event PUBLISHER already connects
-# lazily and swallows failures (see libs/events/src/events/publisher.py's
-# RabbitMQPublisher and publish.py's schedule_publish), and Analytics'
-# event CONSUMER retries forever with backoff without blocking its own
-# startup (see services/analytics-service/src/analytics_service/consumer.py's
-# _run_forever) — so nothing here crashes for lack of a broker, ingestion
-# and audit logging just don't receive anything. Analytics' own read API
-# (usage/cost queries against its own DB) still works normally.
+# Two real limitations remain, both surfaced honestly in the frontend's
+# empty states rather than hidden:
+# - No message broker (db-vm is Postgres + Redis only, per the ask), so
+#   Audit Service and Analytics' event *ingestion* never receives
+#   anything — their read APIs work fine against real data, but nothing
+#   will ever populate the audit log or analytics' cost/usage tables
+#   here. Every service's event PUBLISHER already connects lazily and
+#   swallows failures (see libs/events/src/events/publisher.py's
+#   RabbitMQPublisher and publish.py's schedule_publish), and Analytics'
+#   event CONSUMER retries forever with backoff without blocking its own
+#   startup (see services/analytics-service/src/analytics_service/consumer.py's
+#   _run_forever) — so nothing here crashes for lack of a broker.
+# - Skill Marketplace runs and its enable/disable + connection-listing
+#   endpoints work for real, but no per-connector OAuth app credentials
+#   (Slack, Google, etc.) are configured in this demo's .env — the
+#   "Connect" flow will reach the real provider and fail there rather
+#   than complete. Set the relevant *_CLIENT_ID/*_CLIENT_SECRET vars
+#   below to actually demo one connector end to end.
 #
 # Images come from the same Artifact Registry the GKE deployment path
 # pushes to (see ../terraform/gcp/artifact_registry.tf and
@@ -108,6 +117,26 @@ services:
       - ./scripts/wait-for.sh:/wait-for.sh:ro
     entrypoint: ["/bin/sh", "/wait-for.sh", "${DB_VM_INTERNAL_IP}:5432", "--"]
     command: ["sh", "-c", "cd services/analytics-service && alembic upgrade head"]
+
+  migrate-audit-service:
+    image: ${AR_HOST:-asia-south1-docker.pkg.dev}/${GCP_PROJECT_ID}/staffstream/audit-service:${IMAGE_TAG:-latest}
+    restart: "no"
+    environment:
+      AUDIT_SERVICE_DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-staffstream}:${POSTGRES_PASSWORD}@${DB_VM_INTERNAL_IP}:5432/audit_service
+    volumes:
+      - ./scripts/wait-for.sh:/wait-for.sh:ro
+    entrypoint: ["/bin/sh", "/wait-for.sh", "${DB_VM_INTERNAL_IP}:5432", "--"]
+    command: ["sh", "-c", "cd services/audit-service && alembic upgrade head"]
+
+  migrate-skill-marketplace:
+    image: ${AR_HOST:-asia-south1-docker.pkg.dev}/${GCP_PROJECT_ID}/staffstream/skill-marketplace:${IMAGE_TAG:-latest}
+    restart: "no"
+    environment:
+      SKILL_MARKETPLACE_DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-staffstream}:${POSTGRES_PASSWORD}@${DB_VM_INTERNAL_IP}:5432/skill_marketplace
+    volumes:
+      - ./scripts/wait-for.sh:/wait-for.sh:ro
+    entrypoint: ["/bin/sh", "/wait-for.sh", "${DB_VM_INTERNAL_IP}:5432", "--"]
+    command: ["sh", "-c", "cd services/skill-marketplace && alembic upgrade head"]
 
   # --- App services -----------------------------------------------------
   tenant-service:
@@ -212,6 +241,14 @@ services:
     # a normal auth error from the provider on first use (see
     # .env.example's comment), same as every other deployment path.
     environment:
+      # Without this, libs/auth falls back to its own hardcoded insecure
+      # dev default (different from every other service's real secret
+      # below) — every request forwarded here with a real token then
+      # fails signature verification with "Invalid or expired token",
+      # which openclaw-runtime surfaces as a 502 on every single /chat
+      # call, since /chat always ends by asking llm-gateway to generate
+      # the reply.
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:?}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-not-set}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-not-set}
       GEMINI_API_KEY: ${GEMINI_API_KEY:-not-set}
@@ -305,6 +342,61 @@ services:
       retries: 5
       start_period: 10s
 
+  skill-marketplace:
+    image: ${AR_HOST:-asia-south1-docker.pkg.dev}/${GCP_PROJECT_ID}/staffstream/skill-marketplace:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    depends_on:
+      migrate-skill-marketplace:
+        condition: service_completed_successfully
+    environment:
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:?}
+      SKILL_MARKETPLACE_DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-staffstream}:${POSTGRES_PASSWORD}@${DB_VM_INTERNAL_IP}:5432/skill_marketplace
+      # Redirect URIs get built from this — must be the public domain
+      # (reached via api-gateway's "connections" route), not this
+      # container's own internal port.
+      SKILL_MARKETPLACE_PUBLIC_BASE_URL: https://${DEMO_DOMAIN:?}
+      OAUTH_ENCRYPTION_KEY: ${OAUTH_ENCRYPTION_KEY:?}
+      # Every *_CLIENT_ID/*_CLIENT_SECRET below defaults to "not-set" in
+      # the image (services/skill-marketplace/src/skill_marketplace/config.py)
+      # if left unset here — the service starts fine and enable/disable +
+      # listing all work; only that connector's OAuth "Connect" flow
+      # 401s/400s against the real provider until you register an app and
+      # set its pair here. See this file's top comment.
+      SLACK_CLIENT_ID: ${SLACK_CLIENT_ID:-}
+      SLACK_CLIENT_SECRET: ${SLACK_CLIENT_SECRET:-}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      SALESFORCE_CLIENT_ID: ${SALESFORCE_CLIENT_ID:-}
+      SALESFORCE_CLIENT_SECRET: ${SALESFORCE_CLIENT_SECRET:-}
+      HUBSPOT_CLIENT_ID: ${HUBSPOT_CLIENT_ID:-}
+      HUBSPOT_CLIENT_SECRET: ${HUBSPOT_CLIENT_SECRET:-}
+      JIRA_CLIENT_ID: ${JIRA_CLIENT_ID:-}
+      JIRA_CLIENT_SECRET: ${JIRA_CLIENT_SECRET:-}
+      GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID:-}
+      GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET:-}
+      MICROSOFT_CLIENT_ID: ${MICROSOFT_CLIENT_ID:-}
+      MICROSOFT_CLIENT_SECRET: ${MICROSOFT_CLIENT_SECRET:-}
+      SERVICENOW_CLIENT_ID: ${SERVICENOW_CLIENT_ID:-}
+      SERVICENOW_CLIENT_SECRET: ${SERVICENOW_CLIENT_SECRET:-}
+      SAP_CLIENT_ID: ${SAP_CLIENT_ID:-}
+      SAP_CLIENT_SECRET: ${SAP_CLIENT_SECRET:-}
+      ORACLE_CLIENT_ID: ${ORACLE_CLIENT_ID:-}
+      ORACLE_CLIENT_SECRET: ${ORACLE_CLIENT_SECRET:-}
+      WHATSAPP_CLIENT_ID: ${WHATSAPP_CLIENT_ID:-}
+      WHATSAPP_CLIENT_SECRET: ${WHATSAPP_CLIENT_SECRET:-}
+      # RABBITMQ_URL deliberately left unset — same reasoning as
+      # analytics-service below.
+    volumes:
+      - ./scripts/wait-for.sh:/wait-for.sh:ro
+    entrypoint: ["/bin/sh", "/wait-for.sh", "${DB_VM_INTERNAL_IP}:5432", "--"]
+    command: ["uvicorn", "skill_marketplace.main:app", "--host", "0.0.0.0", "--port", "8010", "--app-dir", "services/skill-marketplace/src"]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8010/healthz', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
   analytics-service:
     image: ${AR_HOST:-asia-south1-docker.pkg.dev}/${GCP_PROJECT_ID}/staffstream/analytics-service:${IMAGE_TAG:-latest}
     restart: unless-stopped
@@ -329,6 +421,29 @@ services:
       retries: 5
       start_period: 15s
 
+  audit-service:
+    image: ${AR_HOST:-asia-south1-docker.pkg.dev}/${GCP_PROJECT_ID}/staffstream/audit-service:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    depends_on:
+      migrate-audit-service:
+        condition: service_completed_successfully
+    environment:
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:?}
+      AUDIT_SERVICE_DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-staffstream}:${POSTGRES_PASSWORD}@${DB_VM_INTERNAL_IP}:5432/audit_service
+      # RABBITMQ_URL deliberately left unset, same reasoning as
+      # analytics-service above — the read API (GET /audit-logs) works
+      # fine, it just never has anything written to it in this topology.
+    volumes:
+      - ./scripts/wait-for.sh:/wait-for.sh:ro
+    entrypoint: ["/bin/sh", "/wait-for.sh", "${DB_VM_INTERNAL_IP}:5432", "--"]
+    command: ["uvicorn", "audit_service.main:app", "--host", "0.0.0.0", "--port", "8011", "--app-dir", "services/audit-service/src"]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8011/healthz', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
   api-gateway:
     image: ${AR_HOST:-asia-south1-docker.pkg.dev}/${GCP_PROJECT_ID}/staffstream/api-gateway:${IMAGE_TAG:-latest}
     restart: unless-stopped
@@ -342,6 +457,7 @@ services:
       memory-service: {condition: service_healthy}
       knowledge-service: {condition: service_healthy}
       analytics-service: {condition: service_healthy}
+      skill-marketplace: {condition: service_healthy}
     environment:
       JWT_SECRET_KEY: ${JWT_SECRET_KEY:?}
       REDIS_URL: redis://${DB_VM_INTERNAL_IP}:6379/0
@@ -353,10 +469,7 @@ services:
       API_GATEWAY_OPENCLAW_RUNTIME_URL: http://openclaw-runtime:8006
       API_GATEWAY_MEMORY_SERVICE_URL: http://memory-service:8007
       API_GATEWAY_KNOWLEDGE_SERVICE_URL: http://knowledge-service:8008
-      # No API_GATEWAY_SKILL_MARKETPLACE_URL — Skill Marketplace isn't
-      # deployed in this demo (see this file's top comment); left at its
-      # own default. A request to /skills, /connections, or /tools fails
-      # with a normal proxy error instead of routing anywhere real.
+      API_GATEWAY_SKILL_MARKETPLACE_URL: http://skill-marketplace:8010
     volumes:
       - ./scripts/wait-for.sh:/wait-for.sh:ro
     entrypoint: ["/bin/sh", "/wait-for.sh", "${DB_VM_INTERNAL_IP}:6379", "--"]
@@ -368,12 +481,44 @@ services:
       retries: 5
       start_period: 15s
 
+  # --- Frontend -----------------------------------------------------------
+  web:
+    image: ${AR_HOST:-asia-south1-docker.pkg.dev}/${GCP_PROJECT_ID}/staffstream/web:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    environment:
+      # NEXT_PUBLIC_* is inlined into the client bundle at *build* time —
+      # this runtime copy is read only by the app's own server-side BFF
+      # route (app/app-api/connections/[skillId]/authorize/route.ts),
+      # which needs it at request time, not build time. Both must point
+      # at the same public domain either way.
+      NEXT_PUBLIC_API_BASE_URL: https://${DEMO_DOMAIN:?}
+      # Next's standalone server.js binds to process.env.HOSTNAME, which
+      # Docker auto-sets to the container ID unless overridden — without
+      # this, the server only listens on its own container IP, not
+      # 0.0.0.0, and both the healthcheck and Caddy fail to reach it.
+      HOSTNAME: 0.0.0.0
+    command: ["node", "server.js"]
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:3000/login').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
   # --- Edge: TLS termination + reverse proxy -----------------------------
   caddy:
     image: caddy:2-alpine
     restart: unless-stopped
     depends_on:
       api-gateway:
+        condition: service_healthy
+      analytics-service:
+        condition: service_healthy
+      audit-service:
+        condition: service_healthy
+      skill-marketplace:
+        condition: service_healthy
+      web:
         condition: service_healthy
     ports:
       - "80:80"

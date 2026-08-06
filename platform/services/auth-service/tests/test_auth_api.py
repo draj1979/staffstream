@@ -1,6 +1,6 @@
 import uuid
 
-from auth import decode_token
+from auth import decode_token, encode_access_token
 
 TENANT_A = str(uuid.uuid4())
 TENANT_B = str(uuid.uuid4())
@@ -8,6 +8,11 @@ TENANT_B = str(uuid.uuid4())
 
 def headers(tenant_id: str) -> dict:
     return {"X-Tenant-Id": tenant_id}
+
+
+def manager_headers(tenant_id: str, employee_id: uuid.UUID) -> dict:
+    token = encode_access_token(uuid.UUID(tenant_id), employee_id, role="manager")
+    return {"Authorization": f"Bearer {token}"}
 
 
 async def test_signup_creates_employee_and_returns_tokens(client, fake_employee_service):
@@ -150,3 +155,113 @@ async def test_logout_is_idempotent_for_unknown_token(client, fake_employee_serv
         "/auth/logout", json={"refresh_token": "never-issued"}, headers=headers(TENANT_A)
     )
     assert resp.status_code == 204
+
+
+async def _create_credentialless_employee(fake_employee_service, tenant_id: str, email: str) -> str:
+    """Mirrors what POST /employees on Employee Service leaves behind: a
+    record with no row in auth-service's credentials table at all."""
+    employee_id = str(uuid.uuid4())
+    fake_employee_service[email] = {
+        "employee_id": employee_id,
+        "tenant_id": tenant_id,
+        "email": email,
+        "department": None,
+        "designation": None,
+        "phone": None,
+        "roles": [],
+    }
+    return employee_id
+
+
+async def test_invite_then_accept_issues_working_credentials(client, fake_employee_service):
+    manager_id = await _create_credentialless_employee(fake_employee_service, TENANT_A, "mgr@acme.com")
+    employee_id = await _create_credentialless_employee(
+        fake_employee_service, TENANT_A, "newhire@acme.com"
+    )
+
+    resp = await client.post(
+        f"/auth/invite/{employee_id}", headers=manager_headers(TENANT_A, uuid.UUID(manager_id))
+    )
+    assert resp.status_code == 200
+    invite_token = resp.json()["invite_token"]
+
+    resp = await client.post(
+        "/auth/invite/accept", json={"token": invite_token, "password": "a-real-password-123"}
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["employee_id"] == employee_id
+    assert body["tenant_id"] == TENANT_A
+
+    # The new credential actually works for a normal login afterwards.
+    resp = await client.post(
+        "/auth/login",
+        json={"email": "newhire@acme.com", "password": "a-real-password-123"},
+        headers=headers(TENANT_A),
+    )
+    assert resp.status_code == 200
+
+
+async def test_invite_rejects_employee_with_existing_credentials(client, fake_employee_service):
+    manager_id = await _create_credentialless_employee(fake_employee_service, TENANT_A, "mgr2@acme.com")
+    signup_resp = await client.post(
+        "/auth/signup",
+        json={"email": "already-has-creds@acme.com", "password": "correct-password-123"},
+        headers=headers(TENANT_A),
+    )
+    employee_id = signup_resp.json()["employee_id"]
+
+    resp = await client.post(
+        f"/auth/invite/{employee_id}", headers=manager_headers(TENANT_A, uuid.UUID(manager_id))
+    )
+    assert resp.status_code == 409
+
+
+async def test_invite_accept_rejects_reuse(client, fake_employee_service):
+    manager_id = await _create_credentialless_employee(fake_employee_service, TENANT_A, "mgr3@acme.com")
+    employee_id = await _create_credentialless_employee(
+        fake_employee_service, TENANT_A, "onceonly@acme.com"
+    )
+    resp = await client.post(
+        f"/auth/invite/{employee_id}", headers=manager_headers(TENANT_A, uuid.UUID(manager_id))
+    )
+    invite_token = resp.json()["invite_token"]
+
+    resp = await client.post(
+        "/auth/invite/accept", json={"token": invite_token, "password": "first-password-123"}
+    )
+    assert resp.status_code == 200
+
+    resp = await client.post(
+        "/auth/invite/accept", json={"token": invite_token, "password": "second-password-123"}
+    )
+    assert resp.status_code == 409
+
+
+async def test_invite_accept_rejects_garbage_token(client, fake_employee_service):
+    resp = await client.post(
+        "/auth/invite/accept", json={"token": "not-a-real-token", "password": "whatever-123"}
+    )
+    assert resp.status_code == 400
+
+
+async def test_invite_unknown_employee_is_404(client, fake_employee_service):
+    manager_id = await _create_credentialless_employee(fake_employee_service, TENANT_A, "mgr4@acme.com")
+    resp = await client.post(
+        f"/auth/invite/{uuid.uuid4()}", headers=manager_headers(TENANT_A, uuid.UUID(manager_id))
+    )
+    assert resp.status_code == 404
+
+
+async def test_invite_requires_manager_role(client, fake_employee_service):
+    employee_id = await _create_credentialless_employee(
+        fake_employee_service, TENANT_A, "plain@acme.com"
+    )
+    plain_employee_token = encode_access_token(
+        uuid.UUID(TENANT_A), uuid.uuid4(), role="employee"
+    )
+    resp = await client.post(
+        f"/auth/invite/{employee_id}",
+        headers={"Authorization": f"Bearer {plain_employee_token}"},
+    )
+    assert resp.status_code == 403

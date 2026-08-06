@@ -31,7 +31,7 @@ resource "google_sql_database_instance" "main" {
   name                = "staffstream-main-${var.environment}"
   region              = var.region
   database_version    = "POSTGRES_16"
-  deletion_protection = true
+  deletion_protection = false
 
   depends_on = [google_service_networking_connection.private_service_connection]
 
@@ -104,7 +104,7 @@ resource "google_sql_database_instance" "vector" {
   name                = "staffstream-vector-${var.environment}"
   region              = var.region
   database_version    = "POSTGRES_16"
-  deletion_protection = true
+  deletion_protection = false
 
   depends_on = [google_service_networking_connection.private_service_connection]
 

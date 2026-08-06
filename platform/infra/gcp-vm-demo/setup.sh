@@ -61,6 +61,25 @@ if ! gcloud compute networks subnets describe "$SUBNET_NAME" --region="$REGION" 
     --range="$SUBNET_RANGE"
 fi
 
+# Cloud Router + NAT — db-vm is intentionally --no-address (no external
+# IP, see below), which also means no route to the internet at all
+# without this: its startup-script needs to apt-get/curl the Docker
+# install, and pull the postgres/redis images from Docker Hub, none of
+# which resolve without NAT. backend-vm has its own external IP and
+# doesn't strictly need this, but routes through it too for consistency
+# now that it exists.
+ROUTER_NAME="${NETWORK_NAME}-router"
+NAT_NAME="${NETWORK_NAME}-nat"
+if ! gcloud compute routers describe "$ROUTER_NAME" --region="$REGION" --project="$PROJECT_ID" >/dev/null 2>&1; then
+  gcloud compute routers create "$ROUTER_NAME" \
+    --project="$PROJECT_ID" --network="$NETWORK_NAME" --region="$REGION"
+fi
+if ! gcloud compute routers nats describe "$NAT_NAME" --router="$ROUTER_NAME" --region="$REGION" --project="$PROJECT_ID" >/dev/null 2>&1; then
+  gcloud compute routers nats create "$NAT_NAME" \
+    --project="$PROJECT_ID" --router="$ROUTER_NAME" --region="$REGION" \
+    --nat-all-subnet-ip-ranges --auto-allocate-nat-external-ips
+fi
+
 # --- Firewall — deliberately narrow, this is the actual security boundary ---
 echo "==> Firewall rules"
 # SSH only via Identity-Aware Proxy's fixed source range — never a public

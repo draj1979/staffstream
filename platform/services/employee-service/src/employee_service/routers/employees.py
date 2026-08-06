@@ -10,6 +10,7 @@ from .. import crud
 from ..agent_registry_client import AgentRegistryError, create_default_agent
 from ..db import get_db
 from ..dependencies import get_publisher
+from ..models import Employee
 from ..schemas import EmployeeCreate, EmployeeOut, EmployeeUpdate
 from ..tenant_client import get_llm_defaults
 
@@ -234,3 +235,67 @@ async def update_employee(
             metadata={"old_roles": old_roles, "new_roles": changed_fields["roles"]},
         )
     return updated
+
+
+async def _set_active_state(
+    employee_id: uuid.UUID,
+    active: bool,
+    request: Request,
+    principal: Principal,
+    publisher: Publisher,
+    db: AsyncSession,
+) -> Employee:
+    employee = await crud.get_employee(db, employee_id)
+    if employee is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Employee not found")
+
+    # Same manager-vs-admin boundary as update_employee: a manager may
+    # only deactivate/reactivate within their own department.
+    if principal.role == Role.MANAGER.value:
+        actor_department = await _actor_department(db, principal)
+        if employee.department != actor_department:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Managers may only manage employees in their own department",
+            )
+
+    if employee.active == active:
+        return employee
+
+    updated = await crud.set_active(db, employee, active)
+    _publish_audit(
+        request,
+        publisher,
+        tenant_id=principal.tenant_id,
+        actor_employee_id=principal.employee_id,
+        action="employee.deactivated" if not active else "employee.reactivated",
+        target_id=employee_id,
+        metadata={},
+    )
+    return updated
+
+
+@router.post("/{employee_id}/deactivate", response_model=EmployeeOut)
+async def deactivate_employee(
+    employee_id: uuid.UUID,
+    request: Request,
+    principal: Principal = Depends(manager_auth),
+    publisher: Publisher = Depends(get_publisher),
+    db: AsyncSession = Depends(get_db),
+):
+    """Revokes login access without touching the employee's record, agent,
+    memory, or audit trail — auth-service refuses to issue tokens for an
+    inactive employee (see auth-service's login/refresh routes). Not a
+    delete: there is no DELETE route on this resource by design."""
+    return await _set_active_state(employee_id, False, request, principal, publisher, db)
+
+
+@router.post("/{employee_id}/reactivate", response_model=EmployeeOut)
+async def reactivate_employee(
+    employee_id: uuid.UUID,
+    request: Request,
+    principal: Principal = Depends(manager_auth),
+    publisher: Publisher = Depends(get_publisher),
+    db: AsyncSession = Depends(get_db),
+):
+    return await _set_active_state(employee_id, True, request, principal, publisher, db)

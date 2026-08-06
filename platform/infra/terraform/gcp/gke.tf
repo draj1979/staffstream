@@ -36,7 +36,7 @@ resource "google_container_cluster" "this" {
     channel = "REGULAR"
   }
 
-  deletion_protection = true
+  deletion_protection = false
 
   depends_on = [google_project_service.apis, google_compute_router_nat.this]
 }

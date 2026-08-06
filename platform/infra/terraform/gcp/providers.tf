@@ -20,17 +20,24 @@ provider "google-beta" {
 # once before the full `terraform apply` — otherwise the kubernetes/helm
 # providers may try to initialize before the cluster's credentials exist.
 # Every apply after that first one is a normal single-pass `terraform apply`.
+#
+# The try()s below cover the opposite end of the same lifecycle: a
+# `terraform destroy` that has already removed google_container_cluster.this
+# (e.g. cluster destroyed before the remaining VPC/networking resources)
+# would otherwise fail with "no client config" evaluating these provider
+# blocks, even when no kubernetes/helm-managed resource is left in state to
+# actually destroy. The fallback values are never dialed in that case.
 provider "kubernetes" {
-  host                   = "https://${google_container_cluster.this.endpoint}"
-  cluster_ca_certificate = base64decode(google_container_cluster.this.master_auth[0].cluster_ca_certificate)
-  token                  = data.google_client_config.default.access_token
+  host                   = try("https://${google_container_cluster.this.endpoint}", "https://invalid.invalid")
+  cluster_ca_certificate = try(base64decode(google_container_cluster.this.master_auth[0].cluster_ca_certificate), "")
+  token                  = try(data.google_client_config.default.access_token, "")
 }
 
 provider "helm" {
   kubernetes {
-    host                   = "https://${google_container_cluster.this.endpoint}"
-    cluster_ca_certificate = base64decode(google_container_cluster.this.master_auth[0].cluster_ca_certificate)
-    token                  = data.google_client_config.default.access_token
+    host                   = try("https://${google_container_cluster.this.endpoint}", "https://invalid.invalid")
+    cluster_ca_certificate = try(base64decode(google_container_cluster.this.master_auth[0].cluster_ca_certificate), "")
+    token                  = try(data.google_client_config.default.access_token, "")
   }
 }
 

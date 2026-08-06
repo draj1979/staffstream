@@ -40,15 +40,21 @@ production path.
    └───────────────────────────────────────┘
 ```
 
-**10 of the platform's 12 services** run here — Skill Marketplace and
-Audit Service are excluded (see [`backend-compose.yml`](backend-compose.yml)'s
-top comment for exactly why: Skill Marketplace needs OAuth apps
-registered per connector to demo anything, and Audit Service +
-Analytics' event *ingestion* both need a message broker this two-VM
-layout doesn't provision — db-vm is Postgres + Redis only, per the ask.
-Nothing crashes for lack of one; ingestion and audit logging just don't
-receive anything. See that file's comment for the specific code paths
-that make this a graceful no-op rather than a startup failure.
+**11 of the platform's 12 services** run here — only Skill Marketplace is
+excluded (see [`backend-compose.yml`](backend-compose.yml)'s top comment
+for exactly why: it needs OAuth apps registered per connector to demo
+anything). Audit Service and Analytics both run and their read APIs work
+against real data, but their event *ingestion* needs a message broker
+this two-VM layout doesn't provision — db-vm is Postgres + Redis only,
+per the ask. Nothing crashes for lack of one; ingestion and audit logging
+just never receive anything, so both will show real-but-empty results
+until something adds RabbitMQ. See that file's comment for the specific
+code paths that make this a graceful no-op rather than a startup
+failure. Analytics and Audit are reached directly by the frontend
+(`/analytics/*`, `/audit-logs`) rather than through `api-gateway` — its
+`ROUTES` table (`services/api-gateway/src/api_gateway/routing.py`) has no
+entries for either service, so Caddy proxies those two path prefixes
+straight to their containers instead (see `../Caddyfile`).
 
 ## Files
 
@@ -73,6 +79,9 @@ PROJECT_ID=your-project-id REGION=asia-south1 ./setup.sh
 
 Creates (all idempotent — safe to re-run):
 - A dedicated custom-mode VPC + subnet (not the default network)
+- A Cloud Router + Cloud NAT — `db-vm` has no external IP, so this is its
+  only route to the internet (needed once, for its startup-script's
+  Docker install and the Postgres/Redis image pulls)
 - Firewall rules: **public 80/443 → `backend-vm` only**; **`backend-vm` → `db-vm` on 5432/6379 only** (scoped by network tag, not IP range); **SSH only via IAP's fixed range `35.235.240.0/20`** — no open SSH to the internet, ever
 - A dedicated GSA for `backend-vm` with `roles/artifactregistry.reader` only (pulls images via the VM's attached identity + `docker-credential-gcr`, no key file, no broader permissions)
 - `db-vm`'s separate data disk (`pd-balanced`, 50GB default) — attached but not yet formatted (the startup-script formats it on first boot only, never on a disk that already has a filesystem)

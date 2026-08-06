@@ -384,3 +384,97 @@ async def test_get_employee_by_email_not_found(client):
         "/employees/by-email/nobody@acme.com", headers=system_headers(TENANT_A)
     )
     assert resp.status_code == 404
+
+
+async def test_new_employee_defaults_active(client, fake_agent_registry):
+    resp = await client.post(
+        "/employees", json={"email": "active-by-default@acme.com"}, headers=system_headers(TENANT_A)
+    )
+    assert resp.json()["active"] is True
+
+
+async def test_manager_can_deactivate_and_reactivate_employee(client):
+    resp = await client.post(
+        "/employees",
+        json={"email": "mgr2@acme.com", "department": "Sales"},
+        headers=system_headers(TENANT_A),
+    )
+    manager_id = uuid.UUID(resp.json()["employee_id"])
+    resp = await client.patch(
+        f"/employees/{manager_id}", json={"roles": ["manager"]}, headers=admin_headers(TENANT_A)
+    )
+    assert resp.status_code == 200
+
+    resp = await client.post(
+        "/employees",
+        json={"email": "report2@acme.com", "department": "Sales"},
+        headers=system_headers(TENANT_A),
+    )
+    report_id = resp.json()["employee_id"]
+
+    resp = await client.post(
+        f"/employees/{report_id}/deactivate", headers=manager_headers(TENANT_A, manager_id)
+    )
+    assert resp.status_code == 200
+    assert resp.json()["active"] is False
+
+    resp = await client.get(f"/employees/{report_id}", headers=user_headers(TENANT_A))
+    assert resp.json()["active"] is False
+
+    resp = await client.post(
+        f"/employees/{report_id}/reactivate", headers=manager_headers(TENANT_A, manager_id)
+    )
+    assert resp.status_code == 200
+    assert resp.json()["active"] is True
+
+
+async def test_manager_cannot_deactivate_employee_in_other_department(client):
+    resp = await client.post(
+        "/employees",
+        json={"email": "mgr3@acme.com", "department": "Sales"},
+        headers=system_headers(TENANT_A),
+    )
+    manager_id = uuid.UUID(resp.json()["employee_id"])
+    resp = await client.patch(
+        f"/employees/{manager_id}", json={"roles": ["manager"]}, headers=admin_headers(TENANT_A)
+    )
+    assert resp.status_code == 200
+
+    resp = await client.post(
+        "/employees",
+        json={"email": "other-dept2@acme.com", "department": "Engineering"},
+        headers=system_headers(TENANT_A),
+    )
+    other_dept_id = resp.json()["employee_id"]
+
+    resp = await client.post(
+        f"/employees/{other_dept_id}/deactivate", headers=manager_headers(TENANT_A, manager_id)
+    )
+    assert resp.status_code == 403
+
+
+async def test_deactivate_nonexistent_employee_is_404(client):
+    resp = await client.post(
+        f"/employees/{uuid.uuid4()}/deactivate", headers=admin_headers(TENANT_A)
+    )
+    assert resp.status_code == 404
+
+
+async def test_deactivate_publishes_audit_event(client, fake_publisher):
+    resp = await client.post(
+        "/employees", json={"email": "audit-target@acme.com"}, headers=system_headers(TENANT_A)
+    )
+    employee_id = resp.json()["employee_id"]
+
+    resp = await client.post(
+        f"/employees/{employee_id}/deactivate", headers=admin_headers(TENANT_A)
+    )
+    assert resp.status_code == 200
+
+    await fake_publisher.wait_for_publish()
+    actions = [
+        AuditEvent.model_validate_json(payload).action
+        for routing_key, payload in fake_publisher.published
+        if routing_key == ROUTING_KEY_AUDIT
+    ]
+    assert "employee.deactivated" in actions

@@ -25,6 +25,22 @@ class LogoutRequest(BaseModel):
     refresh_token: str
 
 
+class InviteOut(BaseModel):
+    # There's no email service in this platform (see docs/gcp-deployment.md
+    # and infra/gcp-vm-demo — nothing sends mail anywhere) — the caller
+    # (an admin/manager in the console) is handed the raw link/token to
+    # deliver however they currently invite anyone: copy-paste, Slack,
+    # whatever. A real deployment would wire this to an email provider
+    # instead of returning it in the response body.
+    invite_token: str
+    expires_in: int
+
+
+class InviteAcceptRequest(BaseModel):
+    token: str
+    password: str = Field(min_length=8, max_length=256)
+
+
 class TokenPair(BaseModel):
     access_token: str
     refresh_token: str

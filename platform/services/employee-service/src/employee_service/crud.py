@@ -60,3 +60,10 @@ async def set_agent_id(db: AsyncSession, employee: Employee, agent_id: uuid.UUID
     await db.commit()
     await db.refresh(employee)
     return employee
+
+
+async def set_active(db: AsyncSession, employee: Employee, active: bool) -> Employee:
+    employee.active = active
+    await db.commit()
+    await db.refresh(employee)
+    return employee

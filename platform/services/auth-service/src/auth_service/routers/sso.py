@@ -229,6 +229,12 @@ async def sso_callback(
                 detail=f"No employee found for {email!r} in this tenant",
             )
 
+        if not employee.get("active", True):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="This account has been deactivated",
+            )
+
         employee_id = uuid.UUID(employee["employee_id"])
         role = highest_role(employee.get("roles", []))
         return await _issue_token_pair(db, tenant_id, employee_id, role=role)
