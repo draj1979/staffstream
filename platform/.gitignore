@@ -38,3 +38,6 @@ tfplan*
 # this naming, so these need their own entries.
 infra/gcp-vm-demo/db.env
 infra/gcp-vm-demo/backend.env
+
+# Personal Claude Code overrides for this project, not team-wide config.
+.claude/settings.local.json
