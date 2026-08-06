@@ -30,3 +30,11 @@ infra/k8s/secret.yaml
 tfplan*
 *.tfvars
 !terraform.tfvars.example
+
+# infra/gcp-vm-demo — db.env/backend.env are real secrets (JWT signing
+# key, DB password, LLM API keys) on the same footing as the root .env
+# above, just named to match each VM's own copy rather than the repo's
+# single .env convention — the *.env.example patterns above don't match
+# this naming, so these need their own entries.
+infra/gcp-vm-demo/db.env
+infra/gcp-vm-demo/backend.env

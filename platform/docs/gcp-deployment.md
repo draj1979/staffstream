@@ -109,6 +109,11 @@ balancer / ingress / TLS / DNS setup for the API Gateway's public entry
 point, a domain for the Argo CD UI, and multi-region/DR are all real
 next steps for an actual production rollout, not included here.
 
+For a simpler, cheaper alternative to this whole path — two VMs and
+`docker compose` instead of GKE/Cloud SQL/Memorystore, good for a demo or
+proof of concept rather than production — see
+[`infra/gcp-vm-demo`](../infra/gcp-vm-demo).
+
 ## Verification status
 
 Built and honestly labeled, not claimed as battle-tested:

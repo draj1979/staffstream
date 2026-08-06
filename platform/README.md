@@ -515,7 +515,9 @@ see [infra/k8s/README.md](infra/k8s/README.md) for the full deploy flow.
 same base for a real GCP deployment — see
 [docs/gcp-deployment.md](docs/gcp-deployment.md) for how that overlay,
 `infra/terraform/gcp`, and the GitHub Actions deploy workflow fit
-together.
+together. `infra/gcp-vm-demo/` is a simpler, cheaper two-VM alternative
+(docker compose instead of GKE/Cloud SQL/Memorystore) for a demo or
+proof of concept — see that directory's own README.
 Every Deployment's `livenessProbe` hits `/healthz` (process alive — never
 checks dependencies, so a DB blip doesn't get the pod restarted) and its
 `readinessProbe` hits `/readyz` (DB-backed services actually check DB

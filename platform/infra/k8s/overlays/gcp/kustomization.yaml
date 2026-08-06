@@ -108,6 +108,25 @@ patches:
     $patch: delete
 - path: deployment-patches.yaml
 
+  # rabbitmq stays in-cluster (see the top comment) but still needs the
+  # same Balanced compute-class nodeSelector as every service Deployment
+  # in deployment-patches.yaml — Autopilot's default general-purpose
+  # class (E2) has zero quota in this project's deploy region. Kept as
+  # its own patch rather than folded into deployment-patches.yaml since
+  # rabbitmq isn't a StaffStream service Deployment in the same sense
+  # (no KSA/CSI/proxy patches apply to it).
+- patch: |-
+    apiVersion: apps/v1
+    kind: Deployment
+    metadata:
+      name: rabbitmq
+      namespace: staffstream
+    spec:
+      template:
+        spec:
+          nodeSelector:
+            cloud.google.com/compute-class: n2-only
+
 # Rewrites each service's image from the base's local
 # `staffstream/<service>:latest` to its real Artifact Registry path —
 # this is also the one field the GitHub Actions deploy workflow

@@ -1,0 +1,13 @@
+# Automatic TLS via Let's Encrypt (Caddy's default ACME behavior — no
+# cert files, no manual renewal, nothing else to configure). Requires
+# DEMO_DOMAIN's DNS A record already pointing at backend-vm's static
+# external IP before Caddy starts, or the ACME HTTP-01 challenge fails —
+# see README.md's setup order.
+#
+# Everything proxies straight to api-gateway — it's already the reverse
+# proxy for every other service (see backend-compose.yml's ROUTES-driven
+# routing), so Caddy's only job here is TLS termination at the edge, not
+# path-based routing of its own.
+{$DEMO_DOMAIN} {
+	reverse_proxy api-gateway:8000
+}

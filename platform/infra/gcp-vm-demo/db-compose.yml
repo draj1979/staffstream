@@ -1,0 +1,60 @@
+# db-vm — Postgres (pgvector) + Redis, no external IP. Everything here is
+# reachable only from inside the VPC (see setup.sh's firewall rule scoping
+# 5432/6379 to backend-vm specifically), never from the internet.
+#
+# One Postgres instance, multiple logical databases (tenant_service,
+# employee_service, auth_service, agent_registry, memory_service,
+# knowledge_service, analytics_service) — matches the local dev
+# docker-compose.yml / infra/docker/init-db.sh pattern, just consolidated
+# onto a single VM instead of split across k8s Deployments. pgvector is
+# needed only by knowledge_service, but the pgvector/pgvector image is a
+# strict superset of plain postgres (same binary, extension available but
+# not force-enabled on databases that don't ask for it), so every
+# database uses this one image rather than running two Postgres
+# containers for one extra extension.
+#
+# skill_marketplace and audit_service are deliberately NOT created here —
+# neither service is part of this demo's 10 (see backend-compose.yml's
+# top comment for why).
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-staffstream}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set a real password in .env}
+      POSTGRES_DB: staffstream
+    ports:
+      - "5432:5432"
+    volumes:
+      # /mnt/db-data is the separate attached persistent disk (see
+      # setup.sh + scripts/db-vm-startup.sh) — NOT the boot disk, so
+      # resizing/replacing the VM never touches the actual data, and the
+      # disk can be snapshotted independently.
+      - /mnt/db-data/postgres:/var/lib/postgresql/data
+      - ./init-db.sh:/docker-entrypoint-initdb.d/init-db.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-staffstream}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    # --appendonly yes: without it, a plain `docker compose restart` (not
+    # even a crash — routine maintenance) loses every rate-limit counter,
+    # which is low-stakes, but there's no reason not to persist it to the
+    # same attached disk everything else here already uses.
+    command: ["redis-server", "--appendonly", "yes", "--dir", "/data"]
+    ports:
+      - "6379:6379"
+    volumes:
+      - /mnt/db-data/redis:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s

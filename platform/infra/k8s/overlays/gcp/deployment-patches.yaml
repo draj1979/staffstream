@@ -1,6 +1,15 @@
 # Strategic-merge patches, one per Deployment — each adds:
 #   - serviceAccountName: <service>-ksa (Workload Identity — see
 #     service-accounts.yaml + ../../../terraform/gcp/workload_identity.tf)
+#   - nodeSelector cloud.google.com/compute-class: n2-only — Autopilot's
+#     default "general-purpose" class is backed by E2, and this project's
+#     E2_CPUS quota in the deploy region is 0 (a real, discovered-in-prod
+#     account limit, not a config bug — every pod sat Pending on
+#     FailedScaleUp/GCE quota exceeded until this was added). Balanced is
+#     backed by N2D falling back to N2, and N2_CPUS quota is available
+#     here. See docs/gcp-deployment.md for the full story; if the E2
+#     quota is ever raised for this project this selector can come back
+#     out, it's not otherwise load-bearing.
 #   - a CSI volume + volume mount wired to that service's own
 #     SecretProviderClass (secret-provider-classes.yaml); the mount is what
 #     triggers the Secret Manager -> Kubernetes Secret sync, nothing in the
@@ -30,6 +39,8 @@ spec:
   template:
     spec:
       serviceAccountName: tenant-service-ksa
+      nodeSelector:
+        cloud.google.com/compute-class: n2-only
       volumes:
         - name: secrets-store
           csi:
@@ -68,6 +79,8 @@ spec:
   template:
     spec:
       serviceAccountName: employee-service-ksa
+      nodeSelector:
+        cloud.google.com/compute-class: n2-only
       volumes:
         - name: secrets-store
           csi:
@@ -106,6 +119,8 @@ spec:
   template:
     spec:
       serviceAccountName: auth-service-ksa
+      nodeSelector:
+        cloud.google.com/compute-class: n2-only
       volumes:
         - name: secrets-store
           csi:
@@ -144,6 +159,8 @@ spec:
   template:
     spec:
       serviceAccountName: agent-registry-ksa
+      nodeSelector:
+        cloud.google.com/compute-class: n2-only
       volumes:
         - name: secrets-store
           csi:
@@ -182,6 +199,8 @@ spec:
   template:
     spec:
       serviceAccountName: llm-gateway-ksa
+      nodeSelector:
+        cloud.google.com/compute-class: n2-only
       volumes:
         - name: secrets-store
           csi:
@@ -208,6 +227,8 @@ spec:
   template:
     spec:
       serviceAccountName: openclaw-runtime-ksa
+      nodeSelector:
+        cloud.google.com/compute-class: n2-only
       volumes:
         - name: secrets-store
           csi:
@@ -234,6 +255,8 @@ spec:
   template:
     spec:
       serviceAccountName: memory-service-ksa
+      nodeSelector:
+        cloud.google.com/compute-class: n2-only
       volumes:
         - name: secrets-store
           csi:
@@ -272,6 +295,8 @@ spec:
   template:
     spec:
       serviceAccountName: knowledge-service-ksa
+      nodeSelector:
+        cloud.google.com/compute-class: n2-only
       volumes:
         - name: secrets-store
           csi:
@@ -310,6 +335,8 @@ spec:
   template:
     spec:
       serviceAccountName: api-gateway-ksa
+      nodeSelector:
+        cloud.google.com/compute-class: n2-only
       volumes:
         - name: secrets-store
           csi:
@@ -336,6 +363,8 @@ spec:
   template:
     spec:
       serviceAccountName: analytics-service-ksa
+      nodeSelector:
+        cloud.google.com/compute-class: n2-only
       volumes:
         - name: secrets-store
           csi:
@@ -374,6 +403,8 @@ spec:
   template:
     spec:
       serviceAccountName: skill-marketplace-ksa
+      nodeSelector:
+        cloud.google.com/compute-class: n2-only
       volumes:
         - name: secrets-store
           csi:
@@ -412,6 +443,8 @@ spec:
   template:
     spec:
       serviceAccountName: audit-service-ksa
+      nodeSelector:
+        cloud.google.com/compute-class: n2-only
       volumes:
         - name: secrets-store
           csi:
