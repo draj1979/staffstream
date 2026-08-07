@@ -9,7 +9,7 @@ Slack API itself, not by any check this code has to remember to make.
 import httpx
 
 from ..config import settings
-from .base import Connector, ConnectorError, TokenSet, ToolSpec
+from .base import Connector, ConnectorError, TokenSet, ToolSpec, has_real_value
 
 _AUTHORIZE_URL = "https://slack.com/oauth/v2/authorize"
 _TOKEN_URL = "https://slack.com/api/oauth.v2.access"
@@ -24,7 +24,7 @@ class SlackConnector(Connector):
     skill_id = "slack"
 
     def is_configured(self) -> bool:
-        return not settings.slack_client_id.startswith("not-set")
+        return has_real_value(settings.slack_client_id)
 
     def tool_specs(self) -> list[ToolSpec]:
         return [

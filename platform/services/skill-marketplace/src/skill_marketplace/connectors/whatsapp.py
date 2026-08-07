@@ -13,7 +13,7 @@ even though the underlying WABA is shared infrastructure.
 import httpx
 
 from ..config import settings
-from .base import Connector, ConnectorError, TokenSet, ToolSpec
+from .base import Connector, ConnectorError, TokenSet, ToolSpec, has_real_value
 
 _AUTHORIZE_URL = "https://www.facebook.com/v21.0/dialog/oauth"
 _TOKEN_URL = "https://graph.facebook.com/v21.0/oauth/access_token"
@@ -36,7 +36,7 @@ class WhatsAppConnector(Connector):
     skill_id = "whatsapp"
 
     def is_configured(self) -> bool:
-        return not settings.whatsapp_client_id.startswith("not-set")
+        return has_real_value(settings.whatsapp_client_id)
 
     def tool_specs(self) -> list[ToolSpec]:
         return [

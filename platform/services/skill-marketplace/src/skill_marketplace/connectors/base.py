@@ -37,6 +37,21 @@ class ConnectorError(Exception):
     rate limit."""
 
 
+def has_real_value(value: str | None) -> bool:
+    """True if a Settings field holds an actual configured value, as
+    opposed to being unset entirely or left as the `"not-set"`/
+    `"not-set-configure-X"` placeholder every `*_client_id` in config.py
+    defaults to. Deliberately also rejects the empty string: an env var
+    that's declared but assigned nothing (e.g. `GITHUB_CLIENT_ID=` in a
+    docker-compose env file whose GitHub Actions secret was never set)
+    overrides pydantic-settings' own "not-set" default with `""` — which
+    passed a naive `.startswith("not-set")` check, since `"".startswith(...)`
+    is `False`, and silently let every one of the 12 connectors think it
+    was configured when none of them were. Every connector's
+    `is_configured()` must go through this, not repeat the check inline."""
+    return bool(value) and not value.startswith("not-set")
+
+
 @dataclass
 class TokenSet:
     access_token: str

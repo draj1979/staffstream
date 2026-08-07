@@ -11,7 +11,7 @@ user, with whatever the instance's own ACLs allow them to see.
 import httpx
 
 from ..config import settings
-from .base import Connector, ConnectorError, TokenSet, ToolSpec
+from .base import Connector, ConnectorError, TokenSet, ToolSpec, has_real_value
 
 
 def _require_instance(tenant_config: dict | None) -> str:
@@ -29,7 +29,7 @@ class ServiceNowConnector(Connector):
     skill_id = "servicenow"
 
     def is_configured(self) -> bool:
-        return not settings.servicenow_client_id.startswith("not-set")
+        return has_real_value(settings.servicenow_client_id)
 
     def tool_specs(self) -> list[ToolSpec]:
         return [

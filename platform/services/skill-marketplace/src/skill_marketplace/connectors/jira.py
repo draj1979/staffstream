@@ -11,7 +11,7 @@ from datetime import UTC, datetime, timedelta
 import httpx
 
 from ..config import settings
-from .base import Connector, ConnectorError, TokenSet, ToolSpec
+from .base import Connector, ConnectorError, TokenSet, ToolSpec, has_real_value
 
 _AUTHORIZE_URL = "https://auth.atlassian.com/authorize"
 _TOKEN_URL = "https://auth.atlassian.com/oauth/token"
@@ -26,7 +26,7 @@ class JiraConnector(Connector):
     supports_refresh = True
 
     def is_configured(self) -> bool:
-        return not settings.jira_client_id.startswith("not-set")
+        return has_real_value(settings.jira_client_id)
 
     def tool_specs(self) -> list[ToolSpec]:
         return [

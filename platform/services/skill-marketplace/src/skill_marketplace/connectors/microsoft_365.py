@@ -8,7 +8,7 @@ import httpx
 
 from ..config import settings
 from . import _microsoft
-from .base import Connector, ConnectorError, TokenSet, ToolSpec
+from .base import Connector, ConnectorError, TokenSet, ToolSpec, has_real_value
 
 _SCOPES = "offline_access Mail.Read Mail.Send"
 
@@ -18,7 +18,7 @@ class Microsoft365Connector(Connector):
     supports_refresh = True
 
     def is_configured(self) -> bool:
-        return not settings.microsoft_client_id.startswith("not-set")
+        return has_real_value(settings.microsoft_client_id)
 
     def tool_specs(self) -> list[ToolSpec]:
         return [

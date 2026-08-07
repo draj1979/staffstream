@@ -11,7 +11,7 @@ a shared service-to-service credential.
 import httpx
 
 from ..config import settings
-from .base import Connector, ConnectorError, TokenSet, ToolSpec
+from .base import Connector, ConnectorError, TokenSet, ToolSpec, has_real_value
 
 _ODATA_BUSINESS_PARTNER = "/sap/opu/odata/sap/API_BUSINESS_PARTNER/A_BusinessPartner"
 _ODATA_SALES_ORDER = "/sap/opu/odata/sap/API_SALES_ORDER_SRV/A_SalesOrder"
@@ -32,7 +32,7 @@ class SapConnector(Connector):
     skill_id = "sap"
 
     def is_configured(self) -> bool:
-        return not settings.sap_client_id.startswith("not-set")
+        return has_real_value(settings.sap_client_id)
 
     def tool_specs(self) -> list[ToolSpec]:
         return [

@@ -10,7 +10,7 @@ from datetime import UTC, datetime, timedelta
 import httpx
 
 from ..config import settings
-from .base import Connector, ConnectorError, TokenSet, ToolSpec
+from .base import Connector, ConnectorError, TokenSet, ToolSpec, has_real_value
 
 _AUTHORIZE_URL = "https://accounts.google.com/o/oauth2/v2/auth"
 _TOKEN_URL = "https://oauth2.googleapis.com/token"
@@ -25,7 +25,7 @@ class GoogleCalendarConnector(Connector):
     supports_refresh = True
 
     def is_configured(self) -> bool:
-        return not settings.google_client_id.startswith("not-set")
+        return has_real_value(settings.google_client_id)
 
     def tool_specs(self) -> list[ToolSpec]:
         return [

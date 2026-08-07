@@ -12,7 +12,7 @@ Every call runs as the employee's own Oracle Fusion user.
 import httpx
 
 from ..config import settings
-from .base import Connector, ConnectorError, TokenSet, ToolSpec
+from .base import Connector, ConnectorError, TokenSet, ToolSpec, has_real_value
 
 _SUPPLIERS_PATH = "/fscmRestApi/resources/11.13.18.05/suppliers"
 _PURCHASE_ORDERS_PATH = "/fscmRestApi/resources/11.13.18.05/purchaseOrders"
@@ -35,7 +35,7 @@ class OracleConnector(Connector):
     supports_refresh = True
 
     def is_configured(self) -> bool:
-        return not settings.oracle_client_id.startswith("not-set")
+        return has_real_value(settings.oracle_client_id)
 
     def tool_specs(self) -> list[ToolSpec]:
         return [
