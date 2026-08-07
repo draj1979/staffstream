@@ -21,9 +21,21 @@ import { NextRequest, NextResponse } from "next/server";
 // to the backend server-side, and forwards the resulting redirect to the
 // browser. The relay cookie is cleared in the response whether we succeed
 // or fail.
+//
+// IMPORTANT: `req.url`'s origin is NOT reliable for building our own
+// redirect targets here. This Next.js server runs behind Caddy inside
+// Docker, and `req.url` resolves against the standalone server's own bind
+// address (0.0.0.0:3000) rather than the public Host the browser actually
+// requested — the browser then tries to navigate to
+// "https://0.0.0.0:3000/..." directly and gets ERR_CONNECTION_REFUSED,
+// since nothing is listening on 0.0.0.0 as far as the browser is
+// concerned. `BASE_URL` below is the one env var we already trust to be
+// this deployment's real public origin (same domain the frontend itself
+// is served from, api and app share one Caddy-fronted domain here) — use
+// it, not req.url, for every redirect this route issues.
 // -----------------------------------------------------------------------------
 
-const BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "https://vartaverse.in";
+const BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "https://app.staffstream.in";
 const RELAY_COOKIE = "ss_authz";
 
 export async function GET(req: NextRequest, { params }: { params: { skillId: string } }) {
@@ -31,7 +43,7 @@ export async function GET(req: NextRequest, { params }: { params: { skillId: str
   const clearCookie = { name: RELAY_COOKIE, value: "", path: "/app-api/connections", maxAge: 0 };
 
   if (!token) {
-    const res = NextResponse.redirect(new URL("/connected-skills?connectError=missing_session", req.url));
+    const res = NextResponse.redirect(new URL("/connected-skills?connectError=missing_session", BASE_URL));
     res.cookies.set(clearCookie);
     return res;
   }
@@ -43,7 +55,7 @@ export async function GET(req: NextRequest, { params }: { params: { skillId: str
       redirect: "manual",
     });
   } catch {
-    const res = NextResponse.redirect(new URL("/connected-skills?connectError=network", req.url));
+    const res = NextResponse.redirect(new URL("/connected-skills?connectError=network", BASE_URL));
     res.cookies.set(clearCookie);
     return res;
   }
@@ -56,7 +68,7 @@ export async function GET(req: NextRequest, { params }: { params: { skillId: str
   }
 
   const reason = upstream.status === 403 ? "not_enabled" : upstream.status === 401 ? "unauthorized" : "unknown";
-  const res = NextResponse.redirect(new URL(`/connected-skills?connectError=${reason}`, req.url));
+  const res = NextResponse.redirect(new URL(`/connected-skills?connectError=${reason}`, BASE_URL));
   res.cookies.set(clearCookie);
   return res;
 }
