@@ -39,6 +39,25 @@ async def _connect_slack(client, http_handler, tenant_id, employee_id):
     assert resp.status_code == 200
 
 
+def _github_oauth_handler(request: httpx.Request) -> httpx.Response:
+    if request.url.path == "/login/oauth/access_token":
+        return httpx.Response(200, json={"access_token": "gh-tok", "scope": "repo"})
+    if request.url.path == "/user":
+        return httpx.Response(200, json={"login": "octocat"})
+    raise AssertionError(f"unexpected call to {request.url}")
+
+
+async def _connect_github(client, http_handler, tenant_id, employee_id):
+    h = headers(tenant_id, employee_id)
+    await client.put("/skills/github/enablement", json={"enabled": True, "config": {}}, headers=h)
+    http_handler.handler = _github_oauth_handler
+    state = encode_state_token(
+        {"tenant_id": str(tenant_id), "employee_id": str(employee_id), "skill_id": "github"}
+    )
+    resp = await client.get("/connections/github/callback", params={"code": "c1", "state": state})
+    assert resp.status_code == 200
+
+
 async def test_invoke_requires_skill_enabled(client):
     resp = await client.post(
         "/skills/slack/invoke",
@@ -88,6 +107,31 @@ async def test_invoke_calls_provider_with_employees_own_token(client, http_handl
     assert resp.status_code == 200
     assert resp.json()["output"]["ok"] is True
     assert seen["auth"] == "Bearer xoxp-tok"  # the employee's own token, not a shared one
+
+
+async def test_invoke_github_list_issues_returns_valid_dict_output(client, http_handler):
+    # Regression test for a real production bug: GitHub's own API returns
+    # a bare JSON array from GET /repos/{owner}/{repo}/issues, unlike
+    # every other connector's list endpoints in this file. github.py's
+    # invoke() used to return that array as-is, which satisfied this same
+    # suite's connector-level unit test (test_github_invoke_list_issues in
+    # test_connectors_phase10.py) but failed for real once it reached
+    # InvokeResponse(output=output) here — output is typed `dict`, and
+    # pydantic rejected the list at request time, 500ing every real
+    # "list my GitHub issues" chat turn. Only a router-level test like
+    # this one, that actually round-trips through InvokeResponse, catches
+    # that; the connector-level test alone did not.
+    tenant_id, employee_id = uuid.uuid4(), uuid.uuid4()
+    await _connect_github(client, http_handler, tenant_id, employee_id)
+
+    http_handler.handler = lambda r: httpx.Response(200, json=[{"number": 1, "title": "Bug"}])
+    resp = await client.post(
+        "/skills/github/invoke",
+        json={"tool_name": "github_list_issues", "input": {"owner": "acme", "repo": "widgets"}},
+        headers=headers(tenant_id, employee_id),
+    )
+    assert resp.status_code == 200
+    assert resp.json()["output"] == {"issues": [{"number": 1, "title": "Bug"}]}
 
 
 async def test_invoke_surfaces_provider_error_as_502(client, http_handler):

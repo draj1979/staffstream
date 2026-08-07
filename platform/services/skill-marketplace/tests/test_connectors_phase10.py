@@ -148,7 +148,14 @@ async def test_github_invoke_list_issues():
             access_token="gh-tok",
             http=http,
         )
-    assert result == [{"number": 1}]
+    # GitHub's own API returns a bare array here — wrapped into a dict
+    # envelope (matching every other connector's list-endpoint shape,
+    # e.g. Jira's {"issues": [...]}) since invoke()'s own contract, and
+    # InvokeResponse.output's schema, are both `dict`. A bare list here
+    # previously passed pydantic validation right up until it reached
+    # routers/invoke.py's real InvokeResponse(output=output) call in
+    # production, which this connector-level test never exercised.
+    assert result == {"issues": [{"number": 1}]}
 
 
 async def test_github_invoke_unknown_tool_raises():

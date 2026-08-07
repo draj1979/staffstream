@@ -139,4 +139,16 @@ class GitHubConnector(Connector):
         body = resp.json()
         if resp.status_code >= 400:
             raise ConnectorError(f"GitHub API error: {body}")
+        if tool_name == "github_list_issues":
+            # Unlike every other connector's list endpoints in this file
+            # (Jira's {"issues": [...]}, Salesforce's {"records": [...]},
+            # ServiceNow's {"result": [...]}, ...), GitHub's REST API
+            # returns a bare top-level JSON array here, not an object —
+            # violating this method's own `-> dict` contract and
+            # InvokeResponse.output's schema (both genuinely `dict`,
+            # matching every other connector's actual behavior). Wrap it
+            # in the same envelope convention the rest of this file
+            # already uses rather than loosening that contract for one
+            # provider's outlier shape.
+            return {"issues": body}
         return body

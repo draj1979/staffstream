@@ -38,6 +38,8 @@ on:
       - "platform/libs/**"
       - "platform/apps/web/**"
       - "platform/infra/gcp-vm-demo/scripts/ci-*.sh"
+      - "platform/infra/gcp-vm-demo/backend-compose.yml"
+      - "platform/infra/gcp-vm-demo/Caddyfile"
       - ".github/workflows/deploy-gcp.yml"
   workflow_dispatch: {}
 
@@ -178,6 +180,31 @@ jobs:
             "${BACKEND_VM_NAME}:/tmp/"
           gcloud compute ssh "$BACKEND_VM_NAME" --zone="$BACKEND_VM_ZONE" --project="$GCP_PROJECT_ID" --tunnel-through-iap --quiet \
             --command="chmod +x /tmp/ci-current-tag.sh /tmp/ci-deploy.sh /tmp/ci-rollback.sh"
+
+      - name: Sync backend-compose.yml + Caddyfile to backend-vm
+        # ci-deploy.sh only ever runs `docker compose pull/up` against
+        # whatever backend-compose.yml is ALREADY sitting in
+        # /opt/staffstream on the VM — before this step existed, nothing
+        # in this workflow ever put a fresher copy there, so any change to
+        # this file (a new/changed env var, a new service, a Caddy route)
+        # silently never took effect on a real deploy no matter how many
+        # times this workflow ran; it took a manual `gcloud compute scp`
+        # to actually apply one (see the incident this step was added to
+        # prevent: OPENCLAW_RUNTIME_SKILL_MARKETPLACE_URL missing from
+        # this file 500'd every tool-calling /chat turn, and pushing the
+        # fix to main + a successful workflow run alone did not deploy
+        # it). Both files are root-owned 0644 on the VM (see
+        # platform/infra/gcp-vm-demo/scripts/backend-vm-startup.sh), so
+        # stage to /tmp then sudo mv into place with matching ownership,
+        # same two-step pattern the scripts above use for +x.
+        run: |
+          set -euo pipefail
+          gcloud compute scp --zone="$BACKEND_VM_ZONE" --project="$GCP_PROJECT_ID" --tunnel-through-iap --quiet \
+            platform/infra/gcp-vm-demo/backend-compose.yml \
+            platform/infra/gcp-vm-demo/Caddyfile \
+            "${BACKEND_VM_NAME}:/tmp/"
+          gcloud compute ssh "$BACKEND_VM_NAME" --zone="$BACKEND_VM_ZONE" --project="$GCP_PROJECT_ID" --tunnel-through-iap --quiet \
+            --command="sudo install -o root -g root -m 644 /tmp/backend-compose.yml /opt/staffstream/backend-compose.yml && sudo install -o root -g root -m 644 /tmp/Caddyfile /opt/staffstream/Caddyfile && rm -f /tmp/backend-compose.yml /tmp/Caddyfile"
 
       - name: Capture currently-deployed image tag
         id: capture
