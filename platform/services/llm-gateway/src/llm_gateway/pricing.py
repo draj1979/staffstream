@@ -23,6 +23,15 @@ PRICING_PER_MILLION_TOKENS: dict[str, dict[str, float]] = {
     # Google Gemini
     "gemini-2.0-flash": {"input": 0.10, "output": 0.40},
     "gemini-2.0-pro": {"input": 1.25, "output": 5.0},
+    # gemini-2.5-flash-lite is still a real, listed model, but returns
+    # 404 "no longer available to new users" for API keys created after
+    # its cutoff — gemini-flash-lite-latest is Google's rolling alias for
+    # their current flash-lite tier and what the demo tenant actually
+    # runs on (see Agent Registry's per-agent model field). Kept both
+    # entries: whichever one an API key can actually reach still gets
+    # correctly priced.
+    "gemini-2.5-flash-lite": {"input": 0.10, "output": 0.40},
+    "gemini-flash-lite-latest": {"input": 0.10, "output": 0.40},
     # Mistral
     "mistral-large-latest": {"input": 2.0, "output": 6.0},
     "mistral-small-latest": {"input": 0.20, "output": 0.60},

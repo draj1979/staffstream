@@ -19,7 +19,14 @@ set -euo pipefail
 # --- Configuration — override any of these as env vars before running ---
 PROJECT_ID="${PROJECT_ID:?Set PROJECT_ID to your GCP project}"
 REGION="${REGION:-asia-south1}"
-ZONE="${ZONE:-asia-south1-a}"
+# asia-south1-a hit a real, hours-long e2-family capacity exhaustion in
+# production use (every e2 size failed with resource_availability, not
+# just db-vm's e2-medium) — -b is the current default for that reason,
+# not a permanent guarantee either. If you hit the same error, probe for
+# a zone with actual capacity before switching (a throwaway
+# `gcloud compute instances create` in a candidate zone, then delete it)
+# rather than assuming any specific zone is safe.
+ZONE="${ZONE:-asia-south1-b}"
 NETWORK_NAME="${NETWORK_NAME:-staffstream-demo}"
 SUBNET_NAME="${SUBNET_NAME:-staffstream-demo}"
 SUBNET_RANGE="${SUBNET_RANGE:-10.20.0.0/24}"
