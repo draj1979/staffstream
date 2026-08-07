@@ -24,6 +24,9 @@ class GoogleCalendarConnector(Connector):
     skill_id = "google_calendar"
     supports_refresh = True
 
+    def is_configured(self) -> bool:
+        return not settings.google_client_id.startswith("not-set")
+
     def tool_specs(self) -> list[ToolSpec]:
         return [
             ToolSpec(

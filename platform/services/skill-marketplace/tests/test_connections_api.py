@@ -2,6 +2,7 @@ import uuid
 from urllib.parse import parse_qs, urlparse
 
 import httpx
+from skill_marketplace.config import settings
 
 from auth import encode_access_token, encode_state_token
 from events import ROUTING_KEY_AUDIT, AuditEvent
@@ -34,7 +35,14 @@ async def test_authorize_requires_skill_enabled_first(client):
     assert resp.status_code == 403
 
 
-async def test_authorize_redirects_to_provider_with_signed_state(client):
+async def test_authorize_redirects_to_provider_with_signed_state(client, monkeypatch):
+    # Slack's own OAuth app credentials must actually be configured (not the
+    # "not-set..." placeholder config.py defaults to) or /authorize now
+    # correctly refuses to redirect at all — see
+    # test_authorize_requires_configured_connector below.
+    monkeypatch.setattr(settings, "slack_client_id", "test-slack-client-id")
+    monkeypatch.setattr(settings, "slack_client_secret", "test-slack-client-secret")
+
     tenant_id, employee_id = uuid.uuid4(), uuid.uuid4()
     h = headers(tenant_id, employee_id)
     await client.put("/skills/slack/enablement", json={"enabled": True, "config": {}}, headers=h)
@@ -46,6 +54,21 @@ async def test_authorize_redirects_to_provider_with_signed_state(client):
     query = parse_qs(urlparse(location).query)
     assert "state" in query
     assert "user_scope" in query
+
+
+async def test_authorize_requires_configured_connector(client):
+    # Without real credentials (the default in every environment that hasn't
+    # set up a given connector's OAuth app yet), /authorize must not redirect
+    # the employee to the provider at all — that would land them on the
+    # provider's own raw "invalid_client" error page with no way back. It
+    # should fail closed, in-app, with a clear message instead.
+    tenant_id, employee_id = uuid.uuid4(), uuid.uuid4()
+    h = headers(tenant_id, employee_id)
+    await client.put("/skills/slack/enablement", json={"enabled": True, "config": {}}, headers=h)
+
+    resp = await client.get("/connections/slack/authorize", headers=h, follow_redirects=False)
+    assert resp.status_code == 503
+    assert "isn't fully set up" in resp.json()["detail"]
 
 
 async def test_authorize_unknown_skill_is_404(client):

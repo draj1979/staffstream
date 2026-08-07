@@ -31,6 +31,9 @@ def _require_base_url(tenant_config: dict | None) -> str:
 class SapConnector(Connector):
     skill_id = "sap"
 
+    def is_configured(self) -> bool:
+        return not settings.sap_client_id.startswith("not-set")
+
     def tool_specs(self) -> list[ToolSpec]:
         return [
             ToolSpec(

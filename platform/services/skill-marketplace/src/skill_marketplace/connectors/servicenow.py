@@ -28,6 +28,9 @@ def _require_instance(tenant_config: dict | None) -> str:
 class ServiceNowConnector(Connector):
     skill_id = "servicenow"
 
+    def is_configured(self) -> bool:
+        return not settings.servicenow_client_id.startswith("not-set")
+
     def tool_specs(self) -> list[ToolSpec]:
         return [
             ToolSpec(

@@ -58,6 +58,22 @@ class Connector(ABC):
     skill_id: str
     supports_refresh: bool = False
 
+    def is_configured(self) -> bool:
+        """Whether this connector's own OAuth app credentials have
+        actually been set to something real, as opposed to the
+        `"not-set"`/`"not-set-configure-X"` placeholder every
+        `*_client_id`/`*_client_secret` in config.py defaults to.
+        Checked by routers/connections.py's `/authorize` route *before*
+        redirecting the employee anywhere — without this, an unconfigured
+        connector still 307s straight to the real provider with a
+        placeholder client_id, and the employee lands on THAT provider's
+        own raw "invalid_client" error page instead of ever coming back
+        to this app. Default True (assume configured) since not every
+        connector necessarily gets its credentials from Settings the
+        same way; override wherever they do — every connector currently
+        shipped does, one line each, e.g. google_calendar.py's."""
+        return True
+
     @abstractmethod
     def tool_specs(self) -> list[ToolSpec]:
         """The tools this connector exposes to the LLM, in the shared

@@ -35,6 +35,9 @@ def _require_phone_number_id(tenant_config: dict | None) -> str:
 class WhatsAppConnector(Connector):
     skill_id = "whatsapp"
 
+    def is_configured(self) -> bool:
+        return not settings.whatsapp_client_id.startswith("not-set")
+
     def tool_specs(self) -> list[ToolSpec]:
         return [
             ToolSpec(

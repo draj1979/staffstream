@@ -19,6 +19,9 @@ _SCOPES = "repo read:user"
 class GitHubConnector(Connector):
     skill_id = "github"
 
+    def is_configured(self) -> bool:
+        return not settings.github_client_id.startswith("not-set")
+
     def tool_specs(self) -> list[ToolSpec]:
         return [
             ToolSpec(

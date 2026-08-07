@@ -58,6 +58,21 @@ async def authorize(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="This skill is not enabled for your organization",
         )
+    if not connector.is_configured():
+        # Caught here specifically so the employee never gets redirected
+        # to the real provider at all — without this, a 307 to e.g.
+        # Google with a placeholder client_id lands the employee on
+        # Google's own raw "Error 401: invalid_client" page, with no way
+        # back to this app and no indication of what actually went wrong
+        # or who can fix it.
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=(
+                f"{skill_id} isn't fully set up yet — an admin needs to "
+                "register a real OAuth app for it and set the "
+                "credentials before anyone can connect."
+            ),
+        )
 
     # Signed, short-lived — the callback trusts tenant_id/employee_id/
     # skill_id from this token, not from anything an attacker could put

@@ -34,6 +34,9 @@ class OracleConnector(Connector):
     skill_id = "oracle"
     supports_refresh = True
 
+    def is_configured(self) -> bool:
+        return not settings.oracle_client_id.startswith("not-set")
+
     def tool_specs(self) -> list[ToolSpec]:
         return [
             ToolSpec(

@@ -24,6 +24,9 @@ class SalesforceConnector(Connector):
     skill_id = "salesforce"
     supports_refresh = True
 
+    def is_configured(self) -> bool:
+        return not settings.salesforce_client_id.startswith("not-set")
+
     def tool_specs(self) -> list[ToolSpec]:
         return [
             ToolSpec(

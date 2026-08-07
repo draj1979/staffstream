@@ -23,6 +23,9 @@ _USER_SCOPES = "channels:history,channels:read,groups:history,groups:read,chat:w
 class SlackConnector(Connector):
     skill_id = "slack"
 
+    def is_configured(self) -> bool:
+        return not settings.slack_client_id.startswith("not-set")
+
     def tool_specs(self) -> list[ToolSpec]:
         return [
             ToolSpec(
