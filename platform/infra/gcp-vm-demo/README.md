@@ -142,9 +142,13 @@ started, via `scripts/ci-rollback.sh`.
 One-time setup beyond what `setup.sh` already does:
 - `setup.sh` itself grants the CI deployer service account
   (`github-actions-deployer@<project>.iam.gserviceaccount.com` by
-  default — override with `CI_DEPLOYER_SA_EMAIL`) `roles/iap.tunnelResourceAccessor`
-  and an instance-scoped `roles/compute.osAdminLogin` on `backend-vm`,
-  and enables OS Login on the VM — all idempotent, safe on a re-run.
+  default — override with `CI_DEPLOYER_SA_EMAIL`) `roles/compute.viewer`
+  and `roles/iap.tunnelResourceAccessor` (both project-level —
+  `gcloud compute ssh`/`scp` needs `compute.projects.get` to resolve
+  project/instance metadata even when tunneling through IAP with OS
+  Login) and an instance-scoped `roles/compute.osAdminLogin` on
+  `backend-vm`, and enables OS Login on the VM — all idempotent, safe on
+  a re-run.
 - Repo variables (Settings → Secrets and variables → Actions →
   Variables): `GCP_PROJECT_ID`, `GCP_REGION`, `GCP_WORKLOAD_IDENTITY_PROVIDER`,
   `GCP_DEPLOYER_SA_EMAIL`, `BACKEND_VM_NAME`, `BACKEND_VM_ZONE`, `DEMO_DOMAIN`.
