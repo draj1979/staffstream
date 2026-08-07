@@ -321,6 +321,8 @@ services:
         condition: service_healthy
       knowledge-service:
         condition: service_healthy
+      skill-marketplace:
+        condition: service_healthy
     environment:
       JWT_SECRET_KEY: ${JWT_SECRET_KEY:?}
       OPENCLAW_RUNTIME_AGENT_REGISTRY_URL: http://agent-registry:8004
@@ -328,12 +330,15 @@ services:
       OPENCLAW_RUNTIME_MEMORY_SERVICE_URL: http://memory-service:8007
       OPENCLAW_RUNTIME_EMPLOYEE_SERVICE_URL: http://employee-service:8002
       OPENCLAW_RUNTIME_KNOWLEDGE_SERVICE_URL: http://knowledge-service:8008
-      # Skill Marketplace isn't deployed in this demo (see this file's top
-      # comment) — left at its own default (unreachable). Harmless: an
-      # agent's tool-loading step only calls out to it when the agent has
-      # a non-empty `skills` allowlist (services/openclaw-runtime/src/openclaw_runtime/skills.py's
-      # load_tools), and no agent gets one without Skill Marketplace
-      # existing to enable a skill on in the first place.
+      # Stale as of this demo's current state (this file's own top comment
+      # already says Skill Marketplace runs as one of the 12 services) —
+      # this var was simply never added when Skill Marketplace was wired
+      # in, so openclaw-runtime's skill_marketplace_url silently fell back
+      # to its config.py default of http://localhost:8010, i.e. itself,
+      # where nothing listens — every /chat turn for any agent with a
+      # non-empty `skills` allowlist (services/openclaw-runtime/src/openclaw_runtime/skills.py's
+      # load_tools) 500'd on a raw ConnectError instead of loading tools.
+      OPENCLAW_RUNTIME_SKILL_MARKETPLACE_URL: http://skill-marketplace:8010
     command: ["uvicorn", "openclaw_runtime.main:app", "--host", "0.0.0.0", "--port", "8006", "--app-dir", "services/openclaw-runtime/src"]
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8006/healthz', timeout=3)"]
