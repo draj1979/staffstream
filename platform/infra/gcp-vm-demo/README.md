@@ -142,13 +142,18 @@ started, via `scripts/ci-rollback.sh`.
 One-time setup beyond what `setup.sh` already does:
 - `setup.sh` itself grants the CI deployer service account
   (`github-actions-deployer@<project>.iam.gserviceaccount.com` by
-  default — override with `CI_DEPLOYER_SA_EMAIL`) `roles/compute.viewer`
-  and `roles/iap.tunnelResourceAccessor` (both project-level —
-  `gcloud compute ssh`/`scp` needs `compute.projects.get` to resolve
-  project/instance metadata even when tunneling through IAP with OS
-  Login) and an instance-scoped `roles/compute.osAdminLogin` on
-  `backend-vm`, and enables OS Login on the VM — all idempotent, safe on
-  a re-run.
+  default — override with `CI_DEPLOYER_SA_EMAIL`) everything
+  `gcloud compute ssh`/`scp` over IAP with OS Login actually needs — not
+  obvious up front, found by hitting each missing piece on a real CI
+  run: `roles/compute.viewer` and `roles/iap.tunnelResourceAccessor`
+  (project-level — `compute.projects.get` is needed to resolve
+  project/instance metadata even through an IAP tunnel), an
+  instance-scoped `roles/compute.osAdminLogin` on `backend-vm`, and
+  `roles/iam.serviceAccountUser` on `backend-vm`'s own attached service
+  account (`staffstream-demo-backend@...` — a separate "can the caller
+  act as the *target* instance's identity" check, distinct from anything
+  granted on the caller itself). Also enables OS Login on the VM. All
+  idempotent, safe on a re-run.
 - Repo variables (Settings → Secrets and variables → Actions →
   Variables): `GCP_PROJECT_ID`, `GCP_REGION`, `GCP_WORKLOAD_IDENTITY_PROVIDER`,
   `GCP_DEPLOYER_SA_EMAIL`, `BACKEND_VM_NAME`, `BACKEND_VM_ZONE`, `DEMO_DOMAIN`.

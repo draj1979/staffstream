@@ -211,6 +211,17 @@ gcloud compute instances add-iam-policy-binding "$BACKEND_VM_NAME" \
   --zone="$ZONE" --project="$PROJECT_ID" \
   --member="serviceAccount:${CI_DEPLOYER_SA_EMAIL}" \
   --role="roles/compute.osAdminLogin" >/dev/null
+# gcloud compute ssh/scp also checks that the caller can "act as" the
+# TARGET instance's own attached service account ($BACKEND_SA_EMAIL,
+# above) — a separate check from anything granted on the caller itself.
+# Without this, ssh/scp fails with "User does not have
+# iam.serviceAccounts.actAs permission on the instance's service
+# account" even though every role above is already correct (found this
+# the hard way too, on the very next CI run after fixing compute.viewer).
+gcloud iam service-accounts add-iam-policy-binding "$BACKEND_SA_EMAIL" \
+  --project="$PROJECT_ID" \
+  --member="serviceAccount:${CI_DEPLOYER_SA_EMAIL}" \
+  --role="roles/iam.serviceAccountUser" >/dev/null
 
 cat <<EOF
 
