@@ -1,56 +1,66 @@
-name: Deploy to GCP
+name: Deploy to GCP (two-VM demo)
 
-# Builds and pushes all twelve service images to Artifact Registry, then
-# bumps platform/infra/k8s/overlays/gcp's image tags and commits that
-# change back to this repo. That commit is the entire "deploy" — Argo CD
-# (installed and bootstrapped by platform/infra/terraform/gcp/argocd.tf,
-# watching this exact path with automated sync) is what actually applies
-# the new tags to the cluster. This workflow never touches the cluster
-# directly: no kubeconfig, no kubectl, no direct GKE credentials at all —
-# see platform/infra/terraform/gcp/github_oidc.tf's comment on why that
-# split matters.
+# Builds and pushes all 13 images (the 12 backend services + the web
+# frontend) to Artifact Registry using Workload Identity Federation — no
+# service account key file, ever; see
+# platform/infra/terraform/gcp/github_oidc.tf for the trust relationship
+# this exchanges a GitHub OIDC token against. Each image is tagged with
+# this commit's SHA (plus `latest` for convenience/inspection only — the
+# SHA tag is what actually gets deployed).
 #
-# This repo's actual project (services/, libs/, infra/) lives under
-# platform/, not the repo root — design_ref/ and site/ are separate,
-# unrelated content sharing this git repo — so every path below is
-# platform/-prefixed rather than assuming the repo root is the project
-# root.
+# The deploy job then SSHes into backend-vm over IAP (no public SSH
+# surface — see platform/infra/gcp-vm-demo/README.md) to bump
+# /opt/staffstream/.env's IMAGE_TAG, `docker compose pull && up -d`, and
+# wait for every container to report healthy. A smoke test against the
+# live public domain (GET /healthz, then a real authenticated POST /chat)
+# gates success. If the deploy or either smoke-test step fails, the
+# workflow rolls backend-vm back to whatever IMAGE_TAG was running before
+# this run touched anything and fails the job — the VM is never left
+# stuck mid-upgrade.
+#
+# This repo's actual project (services/, libs/, apps/, infra/) lives
+# under platform/, not the repo root — design_ref/ and site/ are
+# separate, unrelated content sharing this git repo — so every path
+# below is platform/-prefixed rather than assuming the repo root is the
+# project root.
+#
+# NOT what this deploys to: platform/infra/terraform/gcp's GKE
+# Autopilot + Cloud SQL + Memorystore + Argo CD path. That infrastructure
+# was torn down in favor of the simpler two-VM docker-compose demo this
+# workflow targets (platform/infra/gcp-vm-demo) — see that directory's
+# README.md for why, and platform/docs/gcp-deployment.md for the GKE
+# path's own docs if that infrastructure is ever stood back up.
 on:
   push:
     branches: [main]
     paths:
       - "platform/services/**"
       - "platform/libs/**"
-      - "platform/infra/k8s/**"
+      - "platform/apps/web/**"
+      - "platform/infra/gcp-vm-demo/scripts/ci-*.sh"
       - ".github/workflows/deploy-gcp.yml"
   workflow_dispatch: {}
 
-# Workload Identity Federation needs id-token; the tag-bump commit needs
-# contents write. Nothing here ever needs a GCP service account key file
-# — see platform/infra/terraform/gcp/github_oidc.tf.
+# Workload Identity Federation needs id-token; nothing here needs
+# contents write (unlike the old GKE-path workflow, this one never
+# commits back to the repo — the deploy target is a live VM, not a
+# git-watched overlay).
 permissions:
-  contents: write
+  contents: read
   id-token: write
 
-# A deploy in flight shouldn't be raced by another push landing mid-build
-# — queue rather than cancel, since a cancelled build-and-push job can
-# leave some (not all) of the twelve images pushed under a half-deployed
-# tag.
+# A deploy in flight shouldn't be raced by another push landing mid-run —
+# queue rather than cancel, since a cancelled mid-deploy run could leave
+# backend-vm's rollback step never firing.
 concurrency:
   group: deploy-gcp
   cancel-in-progress: false
 
 env:
   # Set once as repository *variables* (Settings -> Secrets and
-  # variables -> Actions -> Variables), not secrets — none of these
-  # values are sensitive (a WIF provider resource name and a service
-  # account email are not credentials, they're identifiers the OIDC
-  # exchange itself proves possession against). Values come straight out
-  # of `terraform output` in platform/infra/terraform/gcp:
-  #   GCP_PROJECT_ID                    -> var.project_id
-  #   GCP_REGION                        -> var.region
-  #   GCP_WORKLOAD_IDENTITY_PROVIDER    -> output.github_actions_workload_identity_provider
-  #   GCP_DEPLOYER_SA_EMAIL             -> output.github_actions_service_account_email
+  # variables -> Actions -> Variables) — none of these are sensitive; a
+  # WIF provider resource name, a service account email, a VM name/zone,
+  # and a public domain are identifiers, not credentials.
   GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
   GCP_REGION: ${{ vars.GCP_REGION }}
 
@@ -59,26 +69,58 @@ jobs:
     name: Build & push (${{ matrix.service }})
     runs-on: ubuntu-latest
     strategy:
-      fail-fast: false # one service's build failing shouldn't abort the other eleven's
+      fail-fast: false # one image's build failing shouldn't abort the other twelve
       matrix:
-        service:
-          - tenant-service
-          - employee-service
-          - auth-service
-          - agent-registry
-          - llm-gateway
-          - openclaw-runtime
-          - memory-service
-          - knowledge-service
-          - api-gateway
-          - analytics-service
-          - skill-marketplace
-          - audit-service
+        include:
+          - service: tenant-service
+            context: platform
+            dockerfile: platform/services/tenant-service/Dockerfile
+          - service: employee-service
+            context: platform
+            dockerfile: platform/services/employee-service/Dockerfile
+          - service: auth-service
+            context: platform
+            dockerfile: platform/services/auth-service/Dockerfile
+          - service: agent-registry
+            context: platform
+            dockerfile: platform/services/agent-registry/Dockerfile
+          - service: llm-gateway
+            context: platform
+            dockerfile: platform/services/llm-gateway/Dockerfile
+          - service: openclaw-runtime
+            context: platform
+            dockerfile: platform/services/openclaw-runtime/Dockerfile
+          - service: memory-service
+            context: platform
+            dockerfile: platform/services/memory-service/Dockerfile
+          - service: knowledge-service
+            context: platform
+            dockerfile: platform/services/knowledge-service/Dockerfile
+          - service: api-gateway
+            context: platform
+            dockerfile: platform/services/api-gateway/Dockerfile
+          - service: analytics-service
+            context: platform
+            dockerfile: platform/services/analytics-service/Dockerfile
+          - service: skill-marketplace
+            context: platform
+            dockerfile: platform/services/skill-marketplace/Dockerfile
+          - service: audit-service
+            context: platform
+            dockerfile: platform/services/audit-service/Dockerfile
+          # Different context (its own directory, not the shared uv
+          # workspace root — apps/web has no sibling-package dependency
+          # on services/libs the way the Python images do) and its own
+          # build arg: NEXT_PUBLIC_API_BASE_URL is inlined into the
+          # client bundle at build time, so the public domain has to be
+          # known here, not just at container-run time.
+          - service: web
+            context: platform/apps/web
+            dockerfile: platform/apps/web/Dockerfile
     steps:
       - uses: actions/checkout@v4
 
       - name: Authenticate to GCP (Workload Identity Federation)
-        id: auth
         uses: google-github-actions/auth@v2
         with:
           workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
@@ -92,68 +134,107 @@ jobs:
       - name: Build and push
         uses: docker/build-push-action@v6
         with:
-          # Build context is platform/ (the uv workspace root) — every
-          # Dockerfile's own header comment documents this same command
-          # shape (`docker build -f services/<svc>/Dockerfile -t ... .`
-          # run from platform/), since each service depends on sibling
-          # libs/ packages that need the whole workspace manifest tree
-          # present to resolve.
-          context: platform
-          file: platform/services/${{ matrix.service }}/Dockerfile
+          context: ${{ matrix.context }}
+          file: ${{ matrix.dockerfile }}
           push: true
+          build-args: |
+            NEXT_PUBLIC_API_BASE_URL=https://${{ vars.DEMO_DOMAIN }}
           tags: |
             ${{ env.GCP_REGION }}-docker.pkg.dev/${{ env.GCP_PROJECT_ID }}/staffstream/${{ matrix.service }}:${{ github.sha }}
             ${{ env.GCP_REGION }}-docker.pkg.dev/${{ env.GCP_PROJECT_ID }}/staffstream/${{ matrix.service }}:latest
-          # `latest` is convenience/inspection only (see
-          # platform/infra/terraform/gcp/artifact_registry.tf's comment) —
-          # the commit-SHA tag below is what the overlay's `images:`
-          # transformer and Argo CD actually deploy.
           cache-from: type=gha,scope=${{ matrix.service }}
           cache-to: type=gha,mode=max,scope=${{ matrix.service }}
 
-  bump-image-tags:
-    name: Bump GCP overlay image tags
+  deploy:
+    name: Deploy to backend-vm + smoke test
     needs: build-and-push
     runs-on: ubuntu-latest
+    env:
+      BACKEND_VM_NAME: ${{ vars.BACKEND_VM_NAME }}
+      BACKEND_VM_ZONE: ${{ vars.BACKEND_VM_ZONE }}
+      DEMO_DOMAIN: ${{ vars.DEMO_DOMAIN }}
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install kustomize
-        # ubuntu-latest runners ship a kustomize binary already
-        # (/usr/local/bin/kustomize) — the install script refuses to
-        # overwrite an existing file, so remove it first to get the
-        # pinned 5.4.3 rather than whatever version GitHub preinstalls.
-        run: |
-          sudo rm -f /usr/local/bin/kustomize
-          curl -sfL "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh" | bash -s -- 5.4.3 /usr/local/bin
+      - name: Authenticate to GCP (Workload Identity Federation)
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_DEPLOYER_SA_EMAIL }}
 
-      - name: Set each service's image tag to this commit's SHA
-        working-directory: platform/infra/k8s/overlays/gcp
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Stage deploy scripts on backend-vm
+        # Always the version actually committed to this repo, not
+        # whatever copy happens to already be sitting on the VM from a
+        # previous run — scripts/ci-*.sh are checked in specifically so
+        # this workflow is the single source of truth for them.
         run: |
           set -euo pipefail
-          services=(
-            tenant-service employee-service auth-service agent-registry
-            llm-gateway openclaw-runtime memory-service knowledge-service
-            api-gateway analytics-service skill-marketplace audit-service
-          )
-          for svc in "${services[@]}"; do
-            kustomize edit set image \
-              "staffstream/${svc}=${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/staffstream/${svc}:${GITHUB_SHA}"
+          gcloud compute scp --zone="$BACKEND_VM_ZONE" --project="$GCP_PROJECT_ID" --tunnel-through-iap --quiet \
+            platform/infra/gcp-vm-demo/scripts/ci-current-tag.sh \
+            platform/infra/gcp-vm-demo/scripts/ci-deploy.sh \
+            platform/infra/gcp-vm-demo/scripts/ci-rollback.sh \
+            "${BACKEND_VM_NAME}:/tmp/"
+          gcloud compute ssh "$BACKEND_VM_NAME" --zone="$BACKEND_VM_ZONE" --project="$GCP_PROJECT_ID" --tunnel-through-iap --quiet \
+            --command="chmod +x /tmp/ci-current-tag.sh /tmp/ci-deploy.sh /tmp/ci-rollback.sh"
+
+      - name: Capture currently-deployed image tag
+        id: capture
+        # Read BEFORE anything else changes, so a failed deploy always
+        # has a real value to roll back to — never guessed or assumed.
+        run: |
+          set -euo pipefail
+          PREV_TAG=$(gcloud compute ssh "$BACKEND_VM_NAME" --zone="$BACKEND_VM_ZONE" --project="$GCP_PROJECT_ID" --tunnel-through-iap --quiet \
+            --command="/tmp/ci-current-tag.sh")
+          echo "prev_tag=${PREV_TAG:-latest}" >> "$GITHUB_OUTPUT"
+
+      - name: Deploy new version
+        run: |
+          set -euo pipefail
+          gcloud compute ssh "$BACKEND_VM_NAME" --zone="$BACKEND_VM_ZONE" --project="$GCP_PROJECT_ID" --tunnel-through-iap --quiet \
+            --command="/tmp/ci-deploy.sh ${{ github.sha }}"
+
+      - name: "Smoke test: GET /healthz"
+        run: |
+          set -euo pipefail
+          for _ in $(seq 1 10); do
+            CODE=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 15 "https://${DEMO_DOMAIN}/healthz" || echo 000)
+            if [ "$CODE" = "200" ]; then
+              echo "healthz OK"
+              exit 0
+            fi
+            sleep 6
           done
+          echo "::error::healthz did not return 200 in time (last status: ${CODE})"
+          exit 1
 
-      - name: Commit and push (this is the actual "deploy" trigger for Argo CD)
+      - name: "Smoke test: real POST /chat call"
+        env:
+          SMOKE_TEST_TENANT_ID: ${{ secrets.SMOKE_TEST_TENANT_ID }}
+          SMOKE_TEST_EMAIL: ${{ secrets.SMOKE_TEST_EMAIL }}
+          SMOKE_TEST_PASSWORD: ${{ secrets.SMOKE_TEST_PASSWORD }}
         run: |
           set -euo pipefail
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add platform/infra/k8s/overlays/gcp/kustomization.yaml
-          if git diff --cached --quiet; then
-            echo "No image tag changes (images already at this SHA) — nothing to deploy."
-            exit 0
+          if [ -z "$SMOKE_TEST_TENANT_ID" ] || [ -z "$SMOKE_TEST_EMAIL" ] || [ -z "$SMOKE_TEST_PASSWORD" ]; then
+            echo "::error::SMOKE_TEST_TENANT_ID / SMOKE_TEST_EMAIL / SMOKE_TEST_PASSWORD repo secrets aren't set — a real /chat call can't run. Set them to a real demo tenant + employee login (Settings -> Secrets and variables -> Actions -> Secrets)."
+            exit 1
           fi
-          # [skip ci]: this same push would otherwise re-trigger this
-          # workflow (it touches platform/infra/k8s/**, one of this
-          # workflow's own path filters) — GitHub Actions honors this
-          # marker and won't start a new run for a commit that carries it.
-          git commit -m "deploy: bump GCP overlay images to ${GITHUB_SHA} [skip ci]"
-          git push
+          TOKEN=$(curl -sS -X POST "https://${DEMO_DOMAIN}/auth/login" \
+            -H "Content-Type: application/json" -H "X-Tenant-Id: ${SMOKE_TEST_TENANT_ID}" \
+            -d "{\"email\":\"${SMOKE_TEST_EMAIL}\",\"password\":\"${SMOKE_TEST_PASSWORD}\"}" \
+            --max-time 20 | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
+          REPLY_JSON=$(curl -sS -X POST "https://${DEMO_DOMAIN}/chat" \
+            -H "Content-Type: application/json" -H "Authorization: Bearer ${TOKEN}" \
+            -d '{"message":"Reply with exactly one word: ok"}' --max-time 30)
+          echo "$REPLY_JSON"
+          echo "$REPLY_JSON" | python3 -c "import sys, json; d = json.load(sys.stdin); assert d.get('reply'), f'no non-empty reply field in response: {d}'"
+
+      - name: Roll back on failure
+        if: failure()
+        run: |
+          set -euo pipefail
+          PREV_TAG="${{ steps.capture.outputs.prev_tag || 'latest' }}"
+          gcloud compute ssh "$BACKEND_VM_NAME" --zone="$BACKEND_VM_ZONE" --project="$GCP_PROJECT_ID" --tunnel-through-iap --quiet \
+            --command="/tmp/ci-rollback.sh ${PREV_TAG}"
+          echo "::error::Deploy or smoke test failed — rolled backend-vm back to IMAGE_TAG=${PREV_TAG}"

@@ -1,5 +1,14 @@
 # Deploying to GCP
 
+> **⚠️ Not the currently active deploy path.** The GKE Autopilot + Cloud
+> SQL + Memorystore + Argo CD infrastructure this doc describes was torn
+> down in favor of the simpler two-VM docker-compose demo — see
+> [`infra/gcp-vm-demo`](../infra/gcp-vm-demo). **`.github/workflows/deploy-gcp.yml`
+> now deploys to that two-VM target, not the GKE/Argo CD flow described
+> below** — this doc is kept as reference for if the GKE path is ever
+> stood back up, not as a description of what that workflow currently
+> does.
+
 How the three pieces of the GCP deployment path fit together:
 [`infra/terraform/gcp`](../infra/terraform/gcp) (infrastructure),
 [`infra/k8s/overlays/gcp`](../infra/k8s/overlays/gcp) (what runs on it),

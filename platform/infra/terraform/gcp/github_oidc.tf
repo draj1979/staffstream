@@ -48,15 +48,30 @@ resource "google_iam_workload_identity_pool_provider" "github" {
   }
 }
 
-# The identity GitHub Actions actually runs as — deliberately narrow:
-# push images to this one Artifact Registry repo, nothing else. It does
-# NOT get Secret Manager access (that's each service's own GSA, see
-# workload_identity.tf) and does NOT get direct GKE/cluster access — the
-# deploy step commits an updated image tag back to this git repo instead,
-# and Argo CD (running in-cluster, watching that path) is what actually
-# applies it. That split means a compromised CI run can push a bad image
-# and open a PR/commit, but can't directly mutate live cluster state,
-# read any application secret, or bypass Argo CD's own sync/diff view.
+# The identity GitHub Actions actually runs as. Originally scoped to
+# "push images, nothing else" for the GKE/Argo CD path (a deploy was a
+# git commit updating an image tag, which Argo CD — not this SA — applied
+# to the cluster; see docs/gcp-deployment.md for that path if it's ever
+# stood back up). Now that ../gcp-vm-demo/deploy-gcp.yml deploys straight
+# to backend-vm over SSH, this SA ALSO holds roles/iap.tunnelResourceAccessor
+# (project-level) and an instance-scoped roles/compute.osAdminLogin on
+# backend-vm — granted by ../gcp-vm-demo/setup.sh, not here, since that
+# whole two-VM path is deliberately outside this Terraform state (see
+# that directory's own README for why).
+#
+# ⚠️ Drift warning: this SA (and its two child resources below) were
+# destroyed by a `terraform destroy` run during the GKE teardown — only
+# the Artifact Registry repo, this SA's push binding on it, and the WIF
+# pool/provider were `terraform state rm`'d out ahead of time to protect
+# them; the SA itself and its WIF trust binding were not, and got swept
+# up. It was recreated directly via gcloud (see that incident's chat
+# history) and is NOT currently tracked in this Terraform state — running
+# `terraform state list` will not show it. A bare `terraform plan`/`apply`
+# here is unsafe regardless (the full GKE/Cloud SQL/Memorystore stack is
+# still defined in this directory's other .tf files, just removed from
+# state — a bare apply would try to recreate all of it), so re-importing
+# this SA needs to happen alongside deliberately handling that, not as a
+# quick follow-up.
 resource "google_service_account" "github_deployer" {
   project      = var.project_id
   account_id   = "github-actions-deployer"

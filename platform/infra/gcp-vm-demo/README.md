@@ -102,28 +102,56 @@ external IP at the end — you need both for the next steps.
 
 3. **Copy to each VM** (over SSH via IAP — this is deliberately a separate step from VM creation, not baked into the startup-script metadata, since instance metadata is visible to anyone with `compute.instances.get` and is not where real secrets belong):
    ```bash
-   gcloud compute scp --zone=asia-south1-a --tunnel-through-iap \
+   gcloud compute scp --zone=asia-south1-b --tunnel-through-iap \
      db-compose.yml init-db.sh db.env db-vm:/opt/staffstream/
 
-   gcloud compute scp --zone=asia-south1-a --tunnel-through-iap --recurse \
+   gcloud compute scp --zone=asia-south1-b --tunnel-through-iap --recurse \
      backend-compose.yml Caddyfile scripts backend.env backend-vm:/opt/staffstream/
    ```
 
 4. **First bring-up** (systemd is already installed and enabled by the startup-scripts; this just renames `.env` into place and gives it its first kick — every reboot after this is automatic, no SSH needed):
    ```bash
-   gcloud compute ssh db-vm --zone=asia-south1-a --tunnel-through-iap -- \
+   gcloud compute ssh db-vm --zone=asia-south1-b --tunnel-through-iap -- \
      'cd /opt/staffstream && mv db.env .env && sudo systemctl restart staffstream-db.service'
 
-   gcloud compute ssh backend-vm --zone=asia-south1-a --tunnel-through-iap -- \
+   gcloud compute ssh backend-vm --zone=asia-south1-b --tunnel-through-iap -- \
      'cd /opt/staffstream && mv backend.env .env && sudo systemctl restart staffstream-backend.service'
    ```
 
 5. **Verify**:
    ```bash
    curl https://your-demo-domain/healthz   # api-gateway, proxied through Caddy
-   gcloud compute ssh backend-vm --zone=asia-south1-a --tunnel-through-iap -- \
+   gcloud compute ssh backend-vm --zone=asia-south1-b --tunnel-through-iap -- \
      'cd /opt/staffstream && docker compose -f backend-compose.yml ps'
    ```
+
+## CI/CD
+
+[`.github/workflows/deploy-gcp.yml`](../../.github/workflows/deploy-gcp.yml)
+builds and pushes all 13 images (12 backend services + `web`) on every
+push to `main`, tagged with the commit SHA, using Workload Identity
+Federation (no service account key file). It then SSHes into
+`backend-vm` over IAP — the same no-public-SSH path `setup.sh` sets up —
+to bump `IMAGE_TAG` in `.env`, `docker compose pull && up -d`, and wait
+for every container to report healthy. A smoke test against the live
+public domain (`GET /healthz`, then a real authenticated `POST /chat`)
+gates success; either the deploy or the smoke test failing rolls
+`backend-vm` back to whatever `IMAGE_TAG` was running before that run
+started, via `scripts/ci-rollback.sh`.
+
+One-time setup beyond what `setup.sh` already does:
+- `setup.sh` itself grants the CI deployer service account
+  (`github-actions-deployer@<project>.iam.gserviceaccount.com` by
+  default — override with `CI_DEPLOYER_SA_EMAIL`) `roles/iap.tunnelResourceAccessor`
+  and an instance-scoped `roles/compute.osAdminLogin` on `backend-vm`,
+  and enables OS Login on the VM — all idempotent, safe on a re-run.
+- Repo variables (Settings → Secrets and variables → Actions →
+  Variables): `GCP_PROJECT_ID`, `GCP_REGION`, `GCP_WORKLOAD_IDENTITY_PROVIDER`,
+  `GCP_DEPLOYER_SA_EMAIL`, `BACKEND_VM_NAME`, `BACKEND_VM_ZONE`, `DEMO_DOMAIN`.
+- Repo secrets: `SMOKE_TEST_TENANT_ID`, `SMOKE_TEST_EMAIL`,
+  `SMOKE_TEST_PASSWORD` — a real tenant + employee login the smoke test
+  uses for its `/chat` call. A demo-only account is fine; it never needs
+  more than a normal employee's own access.
 
 ## What makes this resilient to a `db-vm` restart
 

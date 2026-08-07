@@ -182,9 +182,27 @@ if ! gcloud compute instances describe "$BACKEND_VM_NAME" --zone="$ZONE" --proje
     --tags=staffstream-backend \
     --service-account="$BACKEND_SA_EMAIL" \
     --scopes=cloud-platform \
+    --metadata=enable-oslogin=TRUE \
     --metadata-from-file=startup-script="${SCRIPT_DIR}/scripts/backend-vm-startup.sh" \
     --boot-disk-size=20GB
 fi
+
+# --- CI/CD SSH access — ../../.github/workflows/deploy-gcp.yml needs to
+# SSH into backend-vm over IAP as the same identity it already pushes
+# images as. OS Login (enabled above) ties SSH identity to IAM instead of
+# instance metadata SSH keys; these two roles are what actually grant
+# it, scoped to just this one instance rather than every VM in the
+# project. Safe to re-run — add-iam-policy-binding is naturally
+# idempotent (re-granting a role you already have is a no-op).
+CI_DEPLOYER_SA_EMAIL="${CI_DEPLOYER_SA_EMAIL:-github-actions-deployer@${PROJECT_ID}.iam.gserviceaccount.com}"
+echo "==> CI/CD SSH access for ${CI_DEPLOYER_SA_EMAIL}"
+gcloud projects add-iam-policy-binding "$PROJECT_ID" \
+  --member="serviceAccount:${CI_DEPLOYER_SA_EMAIL}" \
+  --role="roles/iap.tunnelResourceAccessor" --condition=None >/dev/null
+gcloud compute instances add-iam-policy-binding "$BACKEND_VM_NAME" \
+  --zone="$ZONE" --project="$PROJECT_ID" \
+  --member="serviceAccount:${CI_DEPLOYER_SA_EMAIL}" \
+  --role="roles/compute.osAdminLogin" >/dev/null
 
 cat <<EOF
 

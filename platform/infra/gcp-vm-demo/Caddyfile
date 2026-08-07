@@ -22,6 +22,16 @@
 #    isn't explicitly claimed above (including "/", which none of the
 #    API prefixes below ever match).
 {$DEMO_DOMAIN} {
+	# api-gateway's own /healthz (services/api-gateway/src/api_gateway/main.py) —
+	# registered ahead of its catch-all proxy router, so this reaches that
+	# handler directly rather than being routed by prefix. The one
+	# externally-reachable health check for deploy-gcp.yml's smoke test
+	# and any future uptime monitoring; every individual service's own
+	# /healthz (used for docker-compose's own healthchecks) stays
+	# internal-only, unrouted here on purpose.
+	handle /healthz {
+		reverse_proxy api-gateway:8000
+	}
 	handle /analytics/* {
 		reverse_proxy analytics-service:8009
 	}
