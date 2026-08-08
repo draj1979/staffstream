@@ -25,6 +25,15 @@ class Settings(BaseSettings):
     # with Slack/Google exactly, protocol and path included).
     public_base_url: str = "http://localhost:8010"
 
+    # Agent Registry — called from routers/connections.py's callback/
+    # disconnect handlers (via agent_registry_client.py) to keep an
+    # employee's agent's own `skills` allowlist in sync with what they've
+    # actually connected. Without this, an OAuth connection succeeding
+    # here does nothing for the agent itself; see
+    # openclaw_runtime.skills.load_tools, which filters every tool
+    # through that allowlist regardless of connection status.
+    agent_registry_url: str = "http://localhost:8004"
+
     # Slack OAuth v2 app credentials — deliberately unprefixed (alias
     # bypasses env_prefix), same reasoning as ANTHROPIC_API_KEY/
     # VOYAGE_API_KEY elsewhere: these are the standard names a Slack app

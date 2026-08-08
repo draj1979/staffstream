@@ -81,6 +81,101 @@ async def test_second_agent_for_same_employee_is_conflict(client):
     assert resp.status_code == 409
 
 
+async def test_grant_skill_with_system_token_adds_to_allowlist(client):
+    # This is the exact call Skill Marketplace makes the moment an
+    # employee's OAuth connection for a skill succeeds — the employee
+    # never logged in for this, so it has to work with a system token,
+    # same as agent auto-creation.
+    employee_id = uuid.uuid4()
+    create_resp = await client.post(
+        "/agents", json={"employee_id": str(employee_id)}, headers=system_headers(TENANT_A)
+    )
+    assert create_resp.json()["skills"] == []
+
+    resp = await client.post(
+        f"/agents/by-employee/{employee_id}/skills/github", headers=system_headers(TENANT_A)
+    )
+    assert resp.status_code == 200
+    assert resp.json()["skills"] == ["github"]
+
+
+async def test_grant_skill_is_idempotent(client):
+    employee_id = uuid.uuid4()
+    await client.post(
+        "/agents", json={"employee_id": str(employee_id)}, headers=system_headers(TENANT_A)
+    )
+    await client.post(
+        f"/agents/by-employee/{employee_id}/skills/github", headers=system_headers(TENANT_A)
+    )
+    resp = await client.post(
+        f"/agents/by-employee/{employee_id}/skills/github", headers=system_headers(TENANT_A)
+    )
+    assert resp.status_code == 200
+    assert resp.json()["skills"] == ["github"]
+
+
+async def test_grant_skill_preserves_other_skills(client):
+    employee_id = uuid.uuid4()
+    await client.post(
+        "/agents", json={"employee_id": str(employee_id)}, headers=system_headers(TENANT_A)
+    )
+    await client.post(
+        f"/agents/by-employee/{employee_id}/skills/slack", headers=system_headers(TENANT_A)
+    )
+    resp = await client.post(
+        f"/agents/by-employee/{employee_id}/skills/github", headers=system_headers(TENANT_A)
+    )
+    assert set(resp.json()["skills"]) == {"slack", "github"}
+
+
+async def test_grant_skill_with_own_user_token_also_works(client):
+    employee_id = uuid.uuid4()
+    await client.post(
+        "/agents", json={"employee_id": str(employee_id)}, headers=system_headers(TENANT_A)
+    )
+    resp = await client.post(
+        f"/agents/by-employee/{employee_id}/skills/github",
+        headers=user_headers(TENANT_A, employee_id),
+    )
+    assert resp.status_code == 200
+    assert resp.json()["skills"] == ["github"]
+
+
+async def test_grant_skill_for_unknown_employee_is_404(client):
+    resp = await client.post(
+        f"/agents/by-employee/{uuid.uuid4()}/skills/github", headers=system_headers(TENANT_A)
+    )
+    assert resp.status_code == 404
+
+
+async def test_revoke_skill_removes_from_allowlist(client):
+    employee_id = uuid.uuid4()
+    await client.post(
+        "/agents", json={"employee_id": str(employee_id)}, headers=system_headers(TENANT_A)
+    )
+    await client.post(
+        f"/agents/by-employee/{employee_id}/skills/github", headers=system_headers(TENANT_A)
+    )
+
+    resp = await client.delete(
+        f"/agents/by-employee/{employee_id}/skills/github", headers=system_headers(TENANT_A)
+    )
+    assert resp.status_code == 200
+    assert resp.json()["skills"] == []
+
+
+async def test_revoke_skill_not_present_is_a_no_op(client):
+    employee_id = uuid.uuid4()
+    await client.post(
+        "/agents", json={"employee_id": str(employee_id)}, headers=system_headers(TENANT_A)
+    )
+    resp = await client.delete(
+        f"/agents/by-employee/{employee_id}/skills/github", headers=system_headers(TENANT_A)
+    )
+    assert resp.status_code == 200
+    assert resp.json()["skills"] == []
+
+
 async def test_same_employee_id_allowed_in_different_tenants(client):
     employee_id = uuid.uuid4()
     resp = await client.post(

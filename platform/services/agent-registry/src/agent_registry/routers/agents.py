@@ -84,6 +84,45 @@ async def get_agent(
     return agent
 
 
+@router.post("/by-employee/{employee_id}/skills/{skill_id}", response_model=AgentOut)
+async def grant_skill(
+    employee_id: uuid.UUID,
+    skill_id: str,
+    principal: Principal = Depends(bootstrap_auth),
+    db: AsyncSession = Depends(get_db),
+):
+    """Called by Skill Marketplace (a system-scoped token, same pattern
+    as Employee Service's auto-create-agent call) the moment an employee
+    successfully connects a skill — without this, an employee's agent
+    never gets a skill added to its own allowlist just because they
+    authorized it, and every /chat turn keeps filtering the tool out
+    (see openclaw_runtime.skills.load_tools). A "user"-scoped token also
+    works here so an employee can grant their own agent a skill
+    directly, same self-service allowance PATCH already has.
+    """
+    agent = await crud.get_agent_by_employee(db, employee_id)
+    if agent is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Agent not found")
+    return await crud.add_skill(db, agent, skill_id)
+
+
+@router.delete("/by-employee/{employee_id}/skills/{skill_id}", response_model=AgentOut)
+async def revoke_skill(
+    employee_id: uuid.UUID,
+    skill_id: str,
+    principal: Principal = Depends(bootstrap_auth),
+    db: AsyncSession = Depends(get_db),
+):
+    """Symmetric counterpart to grant_skill, called on disconnect —
+    revoking the OAuth connection also revokes the agent's own ability
+    to call that skill's tools, rather than leaving a dangling allowlist
+    entry pointing at a connection that no longer exists."""
+    agent = await crud.get_agent_by_employee(db, employee_id)
+    if agent is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Agent not found")
+    return await crud.remove_skill(db, agent, skill_id)
+
+
 @router.patch("/{agent_id}", response_model=AgentOut)
 async def update_agent(
     agent_id: uuid.UUID,

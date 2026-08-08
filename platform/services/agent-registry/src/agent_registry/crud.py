@@ -45,3 +45,25 @@ async def update_agent(db: AsyncSession, agent: Agent, data: AgentUpdate) -> Age
     await db.commit()
     await db.refresh(agent)
     return agent
+
+
+async def add_skill(db: AsyncSession, agent: Agent, skill_id: str) -> Agent:
+    """Idempotently add one skill to an agent's own allowlist — the
+    narrow, single-skill counterpart to update_agent's full-replace
+    PATCH, meant for Skill Marketplace to call the moment an employee
+    connects a skill (see skill_marketplace.agent_registry_client),
+    without needing to know or overwrite the agent's other skills."""
+    if skill_id not in agent.skills:
+        agent.skills = [*agent.skills, skill_id]
+        await db.commit()
+        await db.refresh(agent)
+    return agent
+
+
+async def remove_skill(db: AsyncSession, agent: Agent, skill_id: str) -> Agent:
+    """Idempotent counterpart to add_skill, called on disconnect."""
+    if skill_id in agent.skills:
+        agent.skills = [s for s in agent.skills if s != skill_id]
+        await db.commit()
+        await db.refresh(agent)
+    return agent

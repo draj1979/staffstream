@@ -9,7 +9,7 @@ from auth import InvalidTokenError, Principal, decode_token, encode_state_token,
 from events import ROUTING_KEY_AUDIT, AuditEvent, Publisher, schedule_publish
 from tenancy import reset_current_tenant_id, set_current_tenant_id
 
-from .. import crud
+from .. import agent_registry_client, crud
 from ..config import settings
 from ..connectors import CONNECTOR_REGISTRY, ConnectorError
 from ..db import get_db
@@ -143,6 +143,15 @@ async def callback(
 
         await crud.upsert_connection(db, employee_id, skill_id, tokens)
 
+        # Grants the employee's own agent this skill's tools — without
+        # this, the OAuth connection above succeeds but the agent's own
+        # `skills` allowlist stays whatever it was (empty, for a
+        # freshly-created agent), and every /chat turn keeps silently
+        # filtering the skill's tools out regardless of the connection
+        # existing. Best-effort: see agent_registry_client's own
+        # docstring for why a failure here doesn't fail this request.
+        await agent_registry_client.grant_skill(tenant_id, employee_id, skill_id)
+
         event = AuditEvent(
             tenant_id=tenant_id,
             actor_employee_id=employee_id,
@@ -175,6 +184,11 @@ async def disconnect(
     if connection is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not connected")
     await crud.delete_connection(db, connection)
+
+    # Symmetric with grant_skill in the callback above — revoking the
+    # connection also revokes the agent's ability to call that skill's
+    # tools, rather than leaving a dangling allowlist entry.
+    await agent_registry_client.revoke_skill(principal.tenant_id, principal.employee_id, skill_id)
 
     event = AuditEvent(
         tenant_id=principal.tenant_id,

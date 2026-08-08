@@ -353,6 +353,8 @@ services:
     depends_on:
       migrate-skill-marketplace:
         condition: service_completed_successfully
+      agent-registry:
+        condition: service_healthy
     environment:
       JWT_SECRET_KEY: ${JWT_SECRET_KEY:?}
       SKILL_MARKETPLACE_DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-staffstream}:${POSTGRES_PASSWORD}@${DB_VM_INTERNAL_IP}:5432/skill_marketplace
@@ -360,6 +362,14 @@ services:
       # (reached via api-gateway's "connections" route), not this
       # container's own internal port.
       SKILL_MARKETPLACE_PUBLIC_BASE_URL: https://${DEMO_DOMAIN:?}
+      # Used to grant/revoke a skill on an employee's own agent the
+      # moment they connect/disconnect it (routers/connections.py via
+      # agent_registry_client.py) — left unset, this falls back to
+      # config.py's http://localhost:8010 default (itself) and every
+      # grant/revoke call silently fails closed, exactly the same class
+      # of bug OPENCLAW_RUNTIME_SKILL_MARKETPLACE_URL's own omission
+      # caused above.
+      SKILL_MARKETPLACE_AGENT_REGISTRY_URL: http://agent-registry:8004
       OAUTH_ENCRYPTION_KEY: ${OAUTH_ENCRYPTION_KEY:?}
       # Every *_CLIENT_ID/*_CLIENT_SECRET below defaults to "not-set" in
       # the image (services/skill-marketplace/src/skill_marketplace/config.py)

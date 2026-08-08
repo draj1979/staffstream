@@ -100,6 +100,67 @@ async def test_callback_exchanges_code_and_stores_connection(client, http_handle
     assert connections["google_calendar"]["connected"] is False
 
 
+async def test_callback_grants_the_skill_to_the_employees_agent(client, http_handler, monkeypatch):
+    # Regression test for the actual reported bug: connecting a skill
+    # via OAuth alone did nothing for the agent's own `skills`
+    # allowlist, so /chat kept filtering the tool out even though the
+    # connection existed (see routers/connections.py's callback,
+    # agent_registry_client.py).
+    tenant_id, employee_id = uuid.uuid4(), uuid.uuid4()
+    h = headers(tenant_id, employee_id)
+    await client.put("/skills/slack/enablement", json={"enabled": True, "config": {}}, headers=h)
+
+    granted = []
+
+    async def fake_grant_skill(tid, eid, skill_id):
+        granted.append((tid, eid, skill_id))
+
+    monkeypatch.setattr(
+        "skill_marketplace.routers.connections.agent_registry_client.grant_skill",
+        fake_grant_skill,
+    )
+
+    http_handler.handler = _slack_oauth_handler
+    state = encode_state_token(
+        {"tenant_id": str(tenant_id), "employee_id": str(employee_id), "skill_id": "slack"}
+    )
+    resp = await client.get(
+        "/connections/slack/callback", params={"code": "authcode123", "state": state}
+    )
+    assert resp.status_code == 200
+    assert granted == [(tenant_id, employee_id, "slack")]
+
+
+async def test_callback_still_succeeds_if_agent_registry_sync_fails(
+    client, http_handler, monkeypatch
+):
+    # agent_registry_client.grant_skill already swallows its own errors
+    # (see that module's docstring) — this confirms the callback route
+    # itself doesn't additionally need to handle failures, since the
+    # client never raises past its own boundary.
+    tenant_id, employee_id = uuid.uuid4(), uuid.uuid4()
+    h = headers(tenant_id, employee_id)
+    await client.put("/skills/slack/enablement", json={"enabled": True, "config": {}}, headers=h)
+
+    async def noop_grant_skill(tid, eid, skill_id):
+        return None  # what the real client does after logging a failure
+
+    monkeypatch.setattr(
+        "skill_marketplace.routers.connections.agent_registry_client.grant_skill",
+        noop_grant_skill,
+    )
+
+    http_handler.handler = _slack_oauth_handler
+    state = encode_state_token(
+        {"tenant_id": str(tenant_id), "employee_id": str(employee_id), "skill_id": "slack"}
+    )
+    resp = await client.get(
+        "/connections/slack/callback", params={"code": "authcode123", "state": state}
+    )
+    assert resp.status_code == 200
+    assert "Connected" in resp.text
+
+
 async def test_callback_rejects_forged_state(client):
     resp = await client.get(
         "/connections/slack/callback",
@@ -148,6 +209,33 @@ async def test_connection_is_scoped_to_the_connecting_employee(client, http_hand
     resp_b = await client.get("/connections", headers=h_b)
     assert next(c for c in resp_a.json() if c["skill_id"] == "slack")["connected"] is True
     assert next(c for c in resp_b.json() if c["skill_id"] == "slack")["connected"] is False
+
+
+async def test_disconnect_revokes_the_skill_from_the_employees_agent(
+    client, http_handler, monkeypatch
+):
+    tenant_id, employee_id = uuid.uuid4(), uuid.uuid4()
+    h = headers(tenant_id, employee_id)
+    await client.put("/skills/slack/enablement", json={"enabled": True, "config": {}}, headers=h)
+    http_handler.handler = _slack_oauth_handler
+    state = encode_state_token(
+        {"tenant_id": str(tenant_id), "employee_id": str(employee_id), "skill_id": "slack"}
+    )
+    await client.get("/connections/slack/callback", params={"code": "c1", "state": state})
+
+    revoked = []
+
+    async def fake_revoke_skill(tid, eid, skill_id):
+        revoked.append((tid, eid, skill_id))
+
+    monkeypatch.setattr(
+        "skill_marketplace.routers.connections.agent_registry_client.revoke_skill",
+        fake_revoke_skill,
+    )
+
+    resp = await client.delete("/connections/slack", headers=h)
+    assert resp.status_code == 204
+    assert revoked == [(tenant_id, employee_id, "slack")]
 
 
 async def test_disconnect_removes_the_connection(client, http_handler):
