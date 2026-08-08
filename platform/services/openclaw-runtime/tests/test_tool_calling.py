@@ -254,3 +254,98 @@ async def test_agent_only_gets_tools_for_skills_in_its_allowlist(client, monkeyp
     resp = await client.post("/chat", json={"message": "hi"}, headers=headers)
     assert resp.status_code == 200
     assert captured["tools"] is None  # slack was offered, but not in this agent's allowlist
+
+
+async def test_max_tool_iterations_forces_a_final_text_only_answer(client, monkeypatch):
+    """A model that keeps calling tools forever must not leave the turn
+    on a stale, possibly-empty tool-use response once
+    MAX_TOOL_ITERATIONS is exhausted — one last call with tools=None
+    forces a real text answer instead."""
+    headers, tenant_id, employee_id = auth_headers()
+    agent = _agent(tenant_id=str(tenant_id), employee_id=str(employee_id), skills=["slack"])
+
+    async def fake_get_agent(emp_id, *, bearer_token):
+        return agent
+
+    generate_calls = []
+
+    async def fake_generate(**kwargs):
+        generate_calls.append(kwargs)
+        # Every single call before the forced final one keeps asking for
+        # another tool call — a pathological/looping model.
+        if len(generate_calls) <= runtime_module.MAX_TOOL_ITERATIONS:
+            return _tool_use_response()
+        return _llm_response(content="Here's a summary of everything I found.")
+
+    async def fake_invoke_skill(skill_id, *, tool_name, tool_input, bearer_token):
+        return {"ok": True}
+
+    monkeypatch.setattr(runtime_module, "get_agent_for_employee", fake_get_agent)
+    monkeypatch.setattr(runtime_module, "generate", fake_generate)
+    monkeypatch.setattr(skill_client_module, "list_tools", _fake_list_tools)
+    monkeypatch.setattr(runtime_module, "invoke_skill", fake_invoke_skill)
+
+    resp = await client.post("/chat", json={"message": "post hi forever"}, headers=headers)
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["reply"] == "Here's a summary of everything I found."
+
+    # MAX_TOOL_ITERATIONS tool-use rounds, plus exactly one forced final
+    # call — not zero (the turn must still resolve) and not another
+    # unbounded round (that call must not offer tools again).
+    assert len(generate_calls) == runtime_module.MAX_TOOL_ITERATIONS + 1
+    assert generate_calls[-1]["tools"] is None
+
+
+async def test_system_prompt_lists_available_tools_and_instructs_proactive_use(
+    client, monkeypatch
+):
+    headers, tenant_id, employee_id = auth_headers()
+    agent = _agent(tenant_id=str(tenant_id), employee_id=str(employee_id), skills=["slack"])
+
+    async def fake_get_agent(emp_id, *, bearer_token):
+        return agent
+
+    captured = {}
+
+    async def fake_generate(**kwargs):
+        captured.update(kwargs)
+        return _llm_response()
+
+    monkeypatch.setattr(runtime_module, "get_agent_for_employee", fake_get_agent)
+    monkeypatch.setattr(runtime_module, "generate", fake_generate)
+    monkeypatch.setattr(skill_client_module, "list_tools", _fake_list_tools)
+
+    resp = await client.post("/chat", json={"message": "hi"}, headers=headers)
+    assert resp.status_code == 200
+
+    system = captured["system"]
+    # Names and describes the actual tool the agent has, by name — not
+    # just relying on the provider's own function-calling metadata.
+    assert "slack_post_message" in system
+    assert "Post a message" in system
+    # Instructs actually calling tools rather than narrating/describing
+    # what it would do.
+    assert "call the tool directly" in system.lower() or "call the" in system.lower()
+
+
+async def test_system_prompt_omits_tools_section_when_agent_has_no_tools(client, monkeypatch):
+    headers, tenant_id, employee_id = auth_headers()
+    agent = _agent(tenant_id=str(tenant_id), employee_id=str(employee_id))  # skills=[]
+
+    async def fake_get_agent(emp_id, *, bearer_token):
+        return agent
+
+    captured = {}
+
+    async def fake_generate(**kwargs):
+        captured.update(kwargs)
+        return _llm_response()
+
+    monkeypatch.setattr(runtime_module, "get_agent_for_employee", fake_get_agent)
+    monkeypatch.setattr(runtime_module, "generate", fake_generate)
+    monkeypatch.setattr(skill_client_module, "list_tools", _fake_list_tools)
+
+    resp = await client.post("/chat", json={"message": "hi"}, headers=headers)
+    assert resp.status_code == 200
+    assert "slack_post_message" not in captured["system"]

@@ -183,6 +183,123 @@ async def test_raises_provider_error_on_unexpected_response_shape():
         await provider.complete(request)
 
 
+async def test_translates_anthropic_style_tool_turns_to_openai_shape():
+    # runtime.py's tool-calling loop builds every follow-up turn in
+    # Anthropic's content-block shape regardless of provider (see
+    # services/openclaw-runtime/src/openclaw_runtime/runtime.py's
+    # _run_tool_calling_loop) — this provider must translate that into
+    # OpenAI's message-level `tool_calls` + role:"tool" shape itself, or
+    # a continuing tool conversation with Gemini/GPT/etc. is malformed.
+    captured = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured["body"] = json.loads(request.content)
+        return httpx.Response(
+            200,
+            json={
+                "choices": [{"message": {"content": "Posted it."}, "finish_reason": "stop"}],
+                "model": "gemini-2.5-flash-lite",
+                "usage": {"prompt_tokens": 30, "completion_tokens": 5},
+            },
+        )
+
+    provider = _provider(handler)
+    request = LLMRequest(
+        model="gemini-2.5-flash-lite",
+        system="Be helpful.",
+        messages=[
+            Message(role="user", content="post hi to #general"),
+            Message(
+                role="assistant",
+                content=[
+                    {"type": "text", "text": "On it."},
+                    {
+                        "type": "tool_use",
+                        "id": "call_1",
+                        "name": "slack_post_message",
+                        "input": {"channel_id": "C1", "text": "hi"},
+                    },
+                ],
+            ),
+            Message(
+                role="user",
+                content=[
+                    {
+                        "type": "tool_result",
+                        "tool_use_id": "call_1",
+                        "content": json.dumps({"ok": True, "ts": "1.1"}),
+                    }
+                ],
+            ),
+        ],
+    )
+    response = await provider.complete(request)
+
+    assert response.content == "Posted it."
+    body_messages = captured["body"]["messages"]
+    assert body_messages[0] == {"role": "system", "content": "Be helpful."}
+    assert body_messages[1] == {"role": "user", "content": "post hi to #general"}
+
+    assistant_msg = body_messages[2]
+    assert assistant_msg["role"] == "assistant"
+    assert assistant_msg["content"] == "On it."
+    assert assistant_msg["tool_calls"] == [
+        {
+            "id": "call_1",
+            "type": "function",
+            "function": {
+                "name": "slack_post_message",
+                "arguments": json.dumps({"channel_id": "C1", "text": "hi"}),
+            },
+        }
+    ]
+
+    tool_msg = body_messages[3]
+    assert tool_msg == {
+        "role": "tool",
+        "tool_call_id": "call_1",
+        "content": json.dumps({"ok": True, "ts": "1.1"}),
+    }
+
+
+async def test_translates_tool_use_only_assistant_turn_with_no_text():
+    captured = {}
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        captured["body"] = json.loads(request.content)
+        return httpx.Response(
+            200,
+            json={"choices": [{"message": {"content": "ok"}, "finish_reason": "stop"}]},
+        )
+
+    provider = _provider(handler)
+    request = LLMRequest(
+        model="gpt-4o",
+        messages=[
+            Message(
+                role="assistant",
+                content=[
+                    {
+                        "type": "tool_use",
+                        "id": "call_1",
+                        "name": "noop",
+                        "input": {},
+                    }
+                ],
+            ),
+            Message(
+                role="user",
+                content=[{"type": "tool_result", "tool_use_id": "call_1", "content": "{}"}],
+            ),
+        ],
+    )
+    await provider.complete(request)
+
+    assistant_msg = captured["body"]["messages"][0]
+    assert assistant_msg["content"] is None
+    assert assistant_msg["tool_calls"][0]["function"]["name"] == "noop"
+
+
 async def test_raises_provider_error_on_transport_failure():
     def handler(request: httpx.Request) -> httpx.Response:
         raise httpx.ConnectError("connection refused")

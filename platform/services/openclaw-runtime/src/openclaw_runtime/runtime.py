@@ -29,7 +29,9 @@ class TurnContext:
     skill_usages: list[dict] = field(default_factory=list)
 
 
-def _build_system_prompt(agent: dict, memory_context: dict, knowledge_context: str | None) -> str:
+def _build_system_prompt(
+    agent: dict, memory_context: dict, knowledge_context: str | None, tools: list[dict]
+) -> str:
     parts = [agent["prompt"]]
 
     if agent.get("personality"):
@@ -49,6 +51,26 @@ def _build_system_prompt(agent: dict, memory_context: dict, knowledge_context: s
 
     if knowledge_context:
         parts.append(f"Relevant knowledge:\n{knowledge_context}")
+
+    if tools:
+        # Native function-calling already tells the model these tools
+        # exist as callable functions — but left to its own judgment, a
+        # model very often narrates what it *would* do ("I would create
+        # an issue for this...") instead of actually calling the tool,
+        # especially when a request only implies an action rather than
+        # spelling it out. Naming the tools here, explicitly, and
+        # instructing proactive use closes that gap — this is prompt
+        # content, not a substitute for the `tools` param itself.
+        tool_lines = "\n".join(f"- {t['name']}: {t['description']}" for t in tools)
+        parts.append(
+            "You have access to the following tools, connected to this employee's own "
+            f"accounts:\n{tool_lines}\n\n"
+            "When the employee's request calls for one of these — checking, searching, "
+            "creating, posting, or otherwise acting in a connected system — call the "
+            "tool directly and use its real result. Do not describe what you would do, "
+            "ask permission to do it, or tell the employee to do it themselves when a "
+            "tool already covers it."
+        )
 
     return "\n\n".join(parts)
 
@@ -125,6 +147,30 @@ async def _run_tool_calling_loop(
                     {"skill_name": skill_id or tc["name"], "success": success}
                 )
         messages.append({"role": "user", "content": result_blocks})
+    else:
+        # The safety valve actually tripped: MAX_TOOL_ITERATIONS rounds
+        # ran and the model *still* wanted another tool call on the last
+        # one (the `for` loop only reaches this `else` when it completes
+        # without `break`, i.e. never hit the `if not tool_calls: break`
+        # above). `response` at this point is that last tool-use-only
+        # turn — its own `content` is often empty, and its pending tool
+        # results were already invoked and appended to `messages` above
+        # but never shown to the model. Force one last call with no
+        # `tools` offered at all, so the model must answer in text from
+        # everything gathered so far instead of the turn silently ending
+        # on a stale, possibly-empty tool-call response.
+        response = await generate(
+            bearer_token=bearer_token,
+            model=agent["model"],
+            system=system_prompt,
+            messages=messages,
+            temperature=agent["temperature"],
+            agent_id=context.agent_id,
+            tools=None,
+            provider=agent.get("provider"),
+        )
+        total_input_tokens += response["usage"]["input_tokens"]
+        total_output_tokens += response["usage"]["output_tokens"]
 
     response["usage"] = {
         "input_tokens": total_input_tokens,
@@ -161,7 +207,7 @@ async def run_chat_turn(
     )
     tools, tool_to_skill = await skills.load_tools(agent, bearer_token=bearer_token)
 
-    system_prompt = _build_system_prompt(agent, memory_context, knowledge_context)
+    system_prompt = _build_system_prompt(agent, memory_context, knowledge_context, tools)
     history = [
         {"role": turn["role"], "content": turn["content"]} for turn in memory_context["history"]
     ]

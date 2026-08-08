@@ -10,14 +10,16 @@ base_url + api_key covers five of this phase's six providers with one
 class; only Claude's native Messages API shape is different enough to
 need its own (see claude.py).
 
-Known limitation, not solved by this class: OpenClaw Runtime's Phase 8
-tool-calling loop builds follow-up messages in Anthropic's content-block
-shape (`tool_use`/`tool_result` blocks). That's a valid *request* to any
-of these providers for the first turn (tools are translated to OpenAI's
-function-calling shape below), but continuing a multi-turn tool
-conversation with a non-Claude provider would need a translation layer
-this phase doesn't build — OpenClaw's tool loop is Claude-only in
-practice today. Flagged in the README, not silently glossed over.
+OpenClaw Runtime's tool-calling loop builds every follow-up message in
+Anthropic's content-block shape (`tool_use`/`tool_result` blocks) — that
+shape is baked into runtime.py regardless of which provider is actually
+serving the request, since Runtime has no per-provider branch of its
+own. `_to_openai_messages` below is what makes that a valid *continuing*
+conversation for this class's providers too, not just the first turn:
+an assistant `tool_use` block becomes OpenAI's message-level `tool_calls`
+field, and each `tool_result` block becomes its own `role: "tool"`
+message keyed by `tool_call_id` — neither of which exists in Anthropic's
+shape, and both of which OpenAI's wire format requires instead of it.
 """
 
 import json
@@ -25,8 +27,53 @@ import json
 import httpx
 
 from ..errors import ProviderError
-from ..models import LLMRequest, LLMResponse, ToolCall, Usage
+from ..models import LLMRequest, LLMResponse, Message, ToolCall, Usage
 from ..provider import Provider
+
+
+def _to_openai_messages(system: str | None, messages: list[Message]) -> list[dict]:
+    out: list[dict] = []
+    if system:
+        out.append({"role": "system", "content": system})
+
+    for m in messages:
+        if isinstance(m.content, str):
+            out.append({"role": m.role, "content": m.content})
+            continue
+
+        # list[dict] of Anthropic content blocks (text / tool_use /
+        # tool_result) — only ever appears on the assistant's own
+        # tool_use echo-back and the user-role tool_result turn that
+        # follows it; see runtime.py's _run_tool_calling_loop.
+        if m.role == "assistant":
+            text = "".join(b["text"] for b in m.content if b.get("type") == "text")
+            tool_use_blocks = [b for b in m.content if b.get("type") == "tool_use"]
+            assistant_msg: dict = {"role": "assistant", "content": text or None}
+            if tool_use_blocks:
+                assistant_msg["tool_calls"] = [
+                    {
+                        "id": b["id"],
+                        "type": "function",
+                        "function": {"name": b["name"], "arguments": json.dumps(b["input"])},
+                    }
+                    for b in tool_use_blocks
+                ]
+            out.append(assistant_msg)
+            continue
+
+        # user role: one OpenAI "tool" message per tool_result block —
+        # OpenAI has no equivalent of Anthropic bundling several results
+        # into one user-role message's content list, each is its own
+        # top-level message instead.
+        for b in m.content:
+            if b.get("type") == "tool_result":
+                out.append(
+                    {"role": "tool", "tool_call_id": b["tool_use_id"], "content": b["content"]}
+                )
+            elif b.get("type") == "text":
+                out.append({"role": "user", "content": b["text"]})
+
+    return out
 
 
 class OpenAICompatibleProvider(Provider):
@@ -36,10 +83,7 @@ class OpenAICompatibleProvider(Provider):
         self._display_name = display_name
 
     async def complete(self, request: LLMRequest) -> LLMResponse:
-        messages: list[dict] = []
-        if request.system:
-            messages.append({"role": "system", "content": request.system})
-        messages.extend({"role": m.role, "content": m.content} for m in request.messages)
+        messages = _to_openai_messages(request.system, request.messages)
 
         body: dict = {
             "model": request.model,
