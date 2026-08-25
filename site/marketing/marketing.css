@@ -1,0 +1,46 @@
+/* Staffstream Marketing — page-specific additions on top of ../tokens.css and ../styles.css */
+
+/* Hero WhatsApp chat preview, replaces the org-tree visual from the AI platform site */
+.chat-thread {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 14px 0 18px;
+}
+.chat-bubble {
+  max-width: 82%;
+  padding: 9px 13px;
+  border-radius: var(--r-lg);
+  font-size: 12.5px;
+  line-height: 1.4;
+}
+.chat-bubble.in {
+  align-self: flex-start;
+  background: var(--slate-800);
+  color: var(--fg-on-dark);
+  border-bottom-left-radius: var(--r-xs);
+}
+.chat-bubble.out {
+  align-self: flex-end;
+  background: var(--teal-600);
+  color: #fff;
+  border-bottom-right-radius: var(--r-xs);
+}
+
+/* "Who we serve" signal chips */
+.quote-signals {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 28px;
+}
+.signal-chip {
+  font-family: var(--font-sans);
+  font-size: var(--t-body-sm);
+  color: var(--fg2);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r-pill);
+  padding: 9px 16px;
+  box-shadow: var(--shadow-xs);
+}
