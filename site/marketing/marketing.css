@@ -14,6 +14,22 @@
   color: var(--fg1);
 }
 
+/* Quote section brand mark — real logo instead of the placeholder glyph */
+.avatar-logo {
+  background: var(--slate-900);
+  padding: 9px;
+}
+.avatar-logo img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+/* Hide the WhatsApp button in the navbar on mobile — Book Free Demo stays */
+@media (max-width: 640px) {
+  .nav-whatsapp-btn { display: none; }
+}
+
 /* Footer social links */
 .ftr-social {
   display: flex;

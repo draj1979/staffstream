@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
+  <defs>
+    <radialGradient id="glow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#76ABAE" stop-opacity="0.22"/>
+      <stop offset="100%" stop-color="#76ABAE" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <rect width="1200" height="630" fill="#1C2128"/>
+  <circle cx="980" cy="120" r="420" fill="url(#glow)"/>
+
+  <!-- faint decorative chat bubbles, right side -->
+  <g opacity="0.35">
+    <rect x="1000" y="70" width="120" height="34" rx="17" fill="#455160"/>
+    <rect x="1030" y="116" width="120" height="34" rx="17" fill="#FF5722"/>
+    <rect x="1000" y="162" width="90" height="34" rx="17" fill="#455160"/>
+  </g>
+
+  <!-- logo mark -->
+  <rect x="64" y="56" width="52" height="52" rx="12" fill="#76ABAE"/>
+  <circle cx="80" cy="72" r="4.6" fill="#1C2128"/>
+  <circle cx="100" cy="72" r="4.6" fill="#1C2128"/>
+  <circle cx="90" cy="92" r="4.6" fill="#FF5722"/>
+  <text x="132" y="97" font-family="Arial, Helvetica, sans-serif" font-weight="700" font-size="34" fill="#FFFFFF">Staffstream</text>
+
+  <!-- eyebrow -->
+  <text x="64" y="185" font-family="Arial, Helvetica, sans-serif" font-weight="600" font-size="15" letter-spacing="2.5" fill="#A5C8CA">OUTSOURCED MARKETING &amp; MARKETING AUTOMATION</text>
+
+  <!-- headline -->
+  <text x="60" y="300" font-family="Georgia, 'Times New Roman', serif" font-size="72" fill="#FFFFFF">Your outsourced</text>
+  <text x="60" y="378" font-family="Georgia, 'Times New Roman', serif" font-size="72" fill="#FFFFFF"><tspan font-style="italic" fill="#FF8A63">marketing team.</tspan></text>
+
+  <!-- subtitle -->
+  <text x="64" y="440" font-family="Arial, Helvetica, sans-serif" font-size="23" fill="rgba(236,238,241,0.7)">Social media, content, paid advertising and WhatsApp-based lead</text>
+  <text x="64" y="472" font-family="Arial, Helvetica, sans-serif" font-size="23" fill="rgba(236,238,241,0.7)">engagement — for startups and SMEs.</text>
+
+  <!-- bottom rule -->
+  <rect x="64" y="562" width="1072" height="3" fill="#FF5722" opacity="0.8"/>
+
+  <text x="64" y="600" font-family="Menlo, Consolas, monospace" font-size="16" fill="rgba(236,238,241,0.5)">staffstream.in/marketing</text>
+  <text x="1136" y="600" text-anchor="end" font-family="Arial, Helvetica, sans-serif" font-size="14" fill="rgba(236,238,241,0.4)">Built by Kartavya Technology</text>
+</svg>
