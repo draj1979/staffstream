@@ -1,5 +1,33 @@
 /* Staffstream Marketing — page-specific additions on top of ../tokens.css and ../styles.css */
 
+/* Company name next to the logo mark in the nav */
+.nav-logo {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+.nav-logo-name {
+  font-family: var(--font-sans);
+  font-weight: var(--w-semibold);
+  font-size: 16px;
+  letter-spacing: var(--tr-tight);
+  color: var(--fg1);
+}
+
+/* Footer social links */
+.ftr-social {
+  display: flex;
+  gap: 14px;
+  margin-top: 4px;
+}
+.ftr-social a {
+  font-size: 12.5px;
+  color: rgba(236,238,241,0.6);
+}
+.ftr-social a:hover {
+  color: var(--teal-300);
+}
+
 /* Hero WhatsApp chat preview, replaces the org-tree visual from the AI platform site */
 .chat-thread {
   display: flex;
