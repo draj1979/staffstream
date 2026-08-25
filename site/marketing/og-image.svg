@@ -1,42 +1,90 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
+<svg xmlns="http://www.w3.org/2000/svg" width="1200px" height="630px" viewBox="0 0 1200 630" preserveAspectRatio="xMinYMin meet">
   <defs>
-    <radialGradient id="glow" cx="50%" cy="50%" r="50%">
-      <stop offset="0%" stop-color="#76ABAE" stop-opacity="0.22"/>
-      <stop offset="100%" stop-color="#76ABAE" stop-opacity="0"/>
-    </radialGradient>
+    <pattern id="dots" width="26" height="26" patternUnits="userSpaceOnUse">
+      <circle cx="1.5" cy="1.5" r="1.5" fill="#303841" opacity="0.06"/>
+    </pattern>
+    <linearGradient id="cardTop" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#FFFFFF"/>
+      <stop offset="100%" stop-color="#FBFBFA"/>
+    </linearGradient>
   </defs>
 
-  <rect width="1200" height="630" fill="#1C2128"/>
-  <circle cx="980" cy="120" r="420" fill="url(#glow)"/>
+  <!-- page background, matches site's bone surface -->
+  <rect width="1200" height="630" fill="#F5F5F5"/>
+  <rect width="1200" height="630" fill="url(#dots)"/>
 
-  <!-- faint decorative chat bubbles, right side -->
-  <g opacity="0.35">
-    <rect x="1000" y="70" width="120" height="34" rx="17" fill="#455160"/>
-    <rect x="1030" y="116" width="120" height="34" rx="17" fill="#FF5722"/>
-    <rect x="1000" y="162" width="90" height="34" rx="17" fill="#455160"/>
-  </g>
+  <!-- logo mark + wordmark -->
+  <rect x="64" y="54" width="40" height="40" rx="10" fill="#76ABAE"/>
+  <circle cx="76" cy="68" r="3.6" fill="#1C2128"/>
+  <circle cx="92" cy="68" r="3.6" fill="#1C2128"/>
+  <circle cx="84" cy="84" r="3.6" fill="#FF5722"/>
+  <text x="116" y="82" font-family="Arial, Helvetica, sans-serif" font-weight="600" font-size="24" fill="#1C2128">Staffstream</text>
 
-  <!-- logo mark -->
-  <rect x="64" y="56" width="52" height="52" rx="12" fill="#76ABAE"/>
-  <circle cx="80" cy="72" r="4.6" fill="#1C2128"/>
-  <circle cx="100" cy="72" r="4.6" fill="#1C2128"/>
-  <circle cx="90" cy="92" r="4.6" fill="#FF5722"/>
-  <text x="132" y="97" font-family="Arial, Helvetica, sans-serif" font-weight="700" font-size="34" fill="#FFFFFF">Staffstream</text>
-
-  <!-- eyebrow -->
-  <text x="64" y="185" font-family="Arial, Helvetica, sans-serif" font-weight="600" font-size="15" letter-spacing="2.5" fill="#A5C8CA">OUTSOURCED MARKETING &amp; MARKETING AUTOMATION</text>
+  <!-- eyebrow pill -->
+  <rect x="64" y="120" width="418" height="34" rx="17" fill="#EEF5F5" stroke="#D8E7E8"/>
+  <circle cx="84" cy="137" r="4" fill="#FF5722"/>
+  <text x="98" y="142" font-family="Arial, Helvetica, sans-serif" font-weight="600" font-size="13" letter-spacing="1.4" fill="#4E8487">OUTSOURCED MARKETING &amp; AUTOMATION</text>
 
   <!-- headline -->
-  <text x="60" y="300" font-family="Georgia, 'Times New Roman', serif" font-size="72" fill="#FFFFFF">Your outsourced</text>
-  <text x="60" y="378" font-family="Georgia, 'Times New Roman', serif" font-size="72" fill="#FFFFFF"><tspan font-style="italic" fill="#FF8A63">marketing team.</tspan></text>
+  <text x="60" y="248" font-family="Georgia, 'Times New Roman', serif" font-size="62" fill="#1C2128">Your outsourced</text>
+  <text x="60" y="316" font-family="Georgia, 'Times New Roman', serif" font-size="62" font-style="italic" fill="#FF5722">marketing team.</text>
 
   <!-- subtitle -->
-  <text x="64" y="440" font-family="Arial, Helvetica, sans-serif" font-size="23" fill="rgba(236,238,241,0.7)">Social media, content, paid advertising and WhatsApp-based lead</text>
-  <text x="64" y="472" font-family="Arial, Helvetica, sans-serif" font-size="23" fill="rgba(236,238,241,0.7)">engagement — for startups and SMEs.</text>
+  <text x="64" y="368" font-family="Arial, Helvetica, sans-serif" font-size="19" fill="#455160">Social media, content, paid advertising and WhatsApp-based lead</text>
+  <text x="64" y="396" font-family="Arial, Helvetica, sans-serif" font-size="19" fill="#455160">engagement — for startups and SMEs.</text>
 
-  <!-- bottom rule -->
-  <rect x="64" y="562" width="1072" height="3" fill="#FF5722" opacity="0.8"/>
+  <!-- capability chips, echo the trust bar -->
+  <g font-family="Arial, Helvetica, sans-serif" font-size="14" fill="#303841">
+    <rect x="64" y="428" width="150" height="34" rx="17" fill="#FFFFFF" stroke="#CFD5DC"/>
+    <text x="139" y="450" text-anchor="middle">Social media</text>
+    <rect x="222" y="428" width="130" height="34" rx="17" fill="#FFFFFF" stroke="#CFD5DC"/>
+    <text x="287" y="450" text-anchor="middle">Content</text>
+    <rect x="360" y="428" width="140" height="34" rx="17" fill="#FFFFFF" stroke="#CFD5DC"/>
+    <text x="430" y="450" text-anchor="middle">Paid ads</text>
+    <rect x="508" y="428" width="150" height="34" rx="17" fill="#FFFFFF" stroke="#CFD5DC"/>
+    <text x="583" y="450" text-anchor="middle">WhatsApp</text>
+  </g>
 
-  <text x="64" y="600" font-family="Menlo, Consolas, monospace" font-size="16" fill="rgba(236,238,241,0.5)">staffstream.in/marketing</text>
-  <text x="1136" y="600" text-anchor="end" font-family="Arial, Helvetica, sans-serif" font-size="14" fill="rgba(236,238,241,0.4)">Built by Kartavya Technology</text>
+  <!-- bottom rule + domain -->
+  <rect x="64" y="536" width="1072" height="2.5" fill="#FF5722" opacity="0.75"/>
+  <text x="64" y="574" font-family="Menlo, Consolas, monospace" font-size="15" fill="#5A6878">staffstream.in/marketing</text>
+  <text x="1136" y="574" text-anchor="end" font-family="Arial, Helvetica, sans-serif" font-size="13" fill="#8090A0">Built by Kartavya Technology</text>
+
+  <!-- WhatsApp chat mockup card, echoes the site's hero-vis -->
+  <g>
+    <rect x="700" y="96" width="436" height="404" rx="16" fill="url(#cardTop)" stroke="#CFD5DC"/>
+    <!-- window chrome -->
+    <rect x="700" y="96" width="436" height="46" rx="16" fill="#F2F4F6"/>
+    <rect x="700" y="126" width="436" height="16" fill="#F2F4F6"/>
+    <circle cx="726" cy="119" r="5" fill="#CFD5DC"/>
+    <circle cx="744" cy="119" r="5" fill="#CFD5DC"/>
+    <circle cx="762" cy="119" r="5" fill="#CFD5DC"/>
+    <rect x="784" y="110" width="220" height="18" rx="6" fill="#FFFFFF" stroke="#E7EAEE"/>
+    <text x="794" y="123" font-family="Menlo, Consolas, monospace" font-size="11" fill="#5A6878">wa.me/918618979775</text>
+
+    <!-- eyebrow -->
+    <text x="724" y="172" font-family="Arial, Helvetica, sans-serif" font-weight="700" font-size="11" letter-spacing="1.2" fill="#8090A0">LEAD ENGAGEMENT · LIVE</text>
+
+    <!-- chat bubbles -->
+    <rect x="724" y="188" width="300" height="52" rx="14" fill="#242A32"/>
+    <text x="740" y="210" font-family="Arial, Helvetica, sans-serif" font-size="13" fill="#ECEEF1">Hi! Saw your ad for weekend delivery</text>
+    <text x="740" y="228" font-family="Arial, Helvetica, sans-serif" font-size="13" fill="#ECEEF1">slots — do you serve Andheri West?</text>
+
+    <rect x="812" y="252" width="324" height="52" rx="14" fill="#5F9A9D"/>
+    <text x="828" y="274" font-family="Arial, Helvetica, sans-serif" font-size="13" fill="#FFFFFF">Yes, we do! One-time order or</text>
+    <text x="828" y="292" font-family="Arial, Helvetica, sans-serif" font-size="13" fill="#FFFFFF">regular delivery?</text>
+
+    <rect x="724" y="316" width="210" height="34" rx="14" fill="#242A32"/>
+    <text x="740" y="338" font-family="Arial, Helvetica, sans-serif" font-size="13" fill="#ECEEF1">Regular, for my cafe.</text>
+
+    <!-- status rows -->
+    <rect x="724" y="372" width="388" height="1" fill="#E7EAEE"/>
+    <text x="724" y="404" font-family="Arial, Helvetica, sans-serif" font-size="13" fill="#242A32">Prospect engaged from Instagram ad</text>
+    <rect x="1004" y="390" width="86" height="22" rx="11" fill="#D8E7E8"/>
+    <text x="1047" y="405" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-weight="600" font-size="11" fill="#2B4849">QUALIFYING</text>
+
+    <text x="724" y="446" font-family="Arial, Helvetica, sans-serif" font-size="13" fill="#242A32">Requirement captured · B2B</text>
+    <rect x="984" y="432" width="106" height="22" rx="11" fill="#F2F4F6"/>
+    <text x="1037" y="447" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-weight="600" font-size="11" fill="#455160">LEAD CAPTURED</text>
+  </g>
 </svg>
